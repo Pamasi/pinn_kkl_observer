@@ -5,7 +5,7 @@ from torch.autograd.functional import jacobian
 
 class System_z:
     """
-    Dynamics of the z-system for both autonomous and non-autonomous cases.
+    Dynamics of the z-system (system mapped in another domain) for both autonomous and non-autonomous cases.
     Autonomous:
         z_dot = Mz(t) + Ky(t)
         
@@ -13,6 +13,7 @@ class System_z:
         z_dot = Mz(t) + Ky(t) + phi(t, z(t))*(u(t) - u0(t))
         phi(t, z(t)) = dT/dx*g
 
+    
     """
     def __init__(self, M, K, system):
         self.M = M
@@ -77,7 +78,7 @@ class Observer:
             with torch.no_grad():
                 x_hat = self.T_inv(torch.tensor(z[-1]).float())
             u_sub_u0 = u(t[idx]) - u0(t[idx])
-            dTdx = jacobian(self.T, x_hat).numpy()
+            dTdx = jacobian(self.T, x_hat).cpu().numpy()
             dTdx_mul_g = np.matmul(dTdx, g)
 
             q = dTdx_mul_g*u_sub_u0     # phi*(u(t) - u0(t))
@@ -123,7 +124,7 @@ class Observer:
             ic_z = np.zeros([1,self.system.z_size])
         else:
             with torch.no_grad():
-                ic_z = self.T(torch.from_numpy(ic)).numpy()
+                ic_z = self.T(torch.from_numpy(ic)).cpu().numpy()
 
         z = data.KKL_observer_data(self.z_system.M, self.z_system.K, y, self.a, self.b, ic_z, self.N)
         z = torch.from_numpy(z).view(self.N+1,self.system.z_size).float()
@@ -143,9 +144,9 @@ class Observer:
         for idx, ic in enumerate(ic_samples):
             x, x_hat, time, error = self.simulate(ic, add_noise=add_noise)
             avr_error += error
-            errors.append(error.numpy())
-            x_traj.append(x.numpy())
-            x_hat_traj.append(x_hat.numpy())
+            errors.append(error.cpu().numpy())
+            x_traj.append(x.cpu().numpy())
+            x_hat_traj.append(x_hat.cpu().numpy())
         avr_error = avr_error / idx
         
         return np.array(x_traj), np.array(x_hat_traj), np.array(errors), avr_error, time

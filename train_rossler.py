@@ -65,7 +65,9 @@ def main():
     num_hidden = 5
     hidden_size = 50
     activation = F.relu
-    normalizer = Normalizer(dataset)
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    normalizer = Normalizer(dataset, device)
     main_net = Main_Network(x_size, z_size, num_hidden, hidden_size, activation, normalizer)      
 
     epochs = 15
