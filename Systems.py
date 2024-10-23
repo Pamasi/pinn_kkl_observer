@@ -114,13 +114,13 @@ class TrackingRadar(System):
 
 # Reverse Duffing Oscillator
 class RevDuff(System):
-    def __init__(self, zdim, add_noise=False, noise_mean=0, noise_std=0.01):
+    def __init__(self, add_noise=False, noise_mean=0, noise_std=0.01):
         self.y_size = 1
         self.x_size = 2
-        if zdim == 5:
-            self.z_size = self.y_size*(2*self.x_size + 1)
-        if zdim == 3:
-            self.z_size = self.y_size*(1*self.x_size + 1)
+        # if zdim == 5:
+        self.z_size = self.y_size*(2*self.x_size + 1)
+        # if zdim == 3:
+        #     self.z_size = self.y_size*(1*self.x_size + 1)
         self.input = None
         self.add_noise = add_noise
         self.noise = 0

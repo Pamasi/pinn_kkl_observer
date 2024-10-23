@@ -86,7 +86,6 @@ class Trainer:
                 self.optimizer.zero_grad()
                 self.net.mode = 'normal'
 
-                
                 z_hat, x_hat, norm_z_hat, norm_x_hat = self.net(x)
                 if self.normalizer != None:
                     label_x = self.normalizer.Normalize(
@@ -116,9 +115,7 @@ class Trainer:
                 # print(self.pde1.lagrange)
             training_loss = (loss_sum / idx).item()
 
-            if self.scheduler == None:
-                pass
-            else:
+            if self.scheduler is not None:
                 self.scheduler.step(training_loss)
 
             # Average loss per epoch

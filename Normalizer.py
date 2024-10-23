@@ -49,7 +49,7 @@ class Normalizer:
         mean, std = self.check_sys(x, mode)
 
         # move to same sensor
-        normalized_x = (x - mean) / std
+        normalized_x = (x.to(self.device) - mean.to(self.device)) / std
         return normalized_x
 
     def Denormalize(self, x, mode):

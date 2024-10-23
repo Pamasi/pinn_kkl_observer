@@ -35,16 +35,17 @@ def main():
     N = 1000          # Number of intervals for RK4
     num_ic = 50       # Number of initial conditions to be sampled
 
+    revduff = Systems.RevDuff(add_noise=False)
+    n_z = revduff.z_size
     # A and B matricies
     A = np.array([-6.5549,  4.6082, -5.2057, 3.3942, 6.0211,
                   -10.9772, -2.3362, -3.7164, -3.9566, -3.7166,
                   -1.9393, -0.2797, -2.7983, -0.8606, -4.8050,
                   -10.5100, -1.0820, -2.6448, -2.1144, -7.0080,
-                  -10.1003, -0.5111, 1.0275, 3.1996, -0.3463]).reshape(5, 5)
+                  -10.1003, -0.5111, 1.0275, 3.1996, -0.3463]).reshape(n_z, n_z)
 
-    B = np.ones([5, 1])
+    B = np.ones([n_z, 1])
 
-    revduff = Systems.RevDuff(5, add_noise=False)
     dataset = DataSet(revduff, A, B, a, b, N, num_ic, limits_normal,
                       PINN_sample_mode='split traj', data_gen_mode='backward sim')
     print('Dataset sucessfully generated.', '\n')
@@ -55,7 +56,7 @@ def main():
     num_hidden = 5
     hidden_size = 50
     activation = F.relu
-    
+
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     normalizer = Normalizer(dataset, device)
     main_net = Main_Network(x_size, z_size, num_hidden,

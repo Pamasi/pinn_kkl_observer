@@ -47,6 +47,9 @@ class Observer:
         self.b = b
         self.N = N
         self.init_z_zero = init_z_zero
+
+        #TODO:
+        # add device
     
     def simulate_NA(self, ic, u0, g):
         """
