@@ -65,13 +65,14 @@ class System:
 
 
 class TrackingRadar(System):
-    def __init__(self, zdim, add_noise=False, noise_mean=0, noise_std=0.01):
-        self.y_size = 2
-        self.x_size = 4
-        if zdim == 5:
-            self.z_size = self.y_size*(2*self.x_size + 1)
-        if zdim == 3:
-            self.z_size = self.y_size*(1*self.x_size + 1)
+    def __init__(self, n_axis=2, n_angular_measure=2, add_noise=False, noise_mean=0, noise_std=0.01):
+        # 2D Motion
+        self.y_size = n_angular_measure
+        self.x_size = n_axis*2
+
+        # choose the latent mapping as done in paper 
+        self.z_size = self.y_size*(2*self.x_size + 1)
+
         self.input = None
         self.add_noise = add_noise
         self.noise = 0
@@ -98,21 +99,24 @@ class TrackingRadar(System):
         if self.add_noise:
             self.noise = self.gen_noise(self.noise_mean, self.noise_std)[0]
 
-        return np.array([x1_dot, x2_dot]) + self.noise
+        return np.array([x1_dot, x2_dot, x3_dot, x4_dot]) + self.noise
 
     def output(self, x):
 
         azimuth = atan2(x[2], x[0])
-        range = sqrt((x[2] + x[0]) ^ 2)
+        range = sqrt(x[2]**2 + x[0]**2)
 
         y = [azimuth, range]
 
         if self.add_noise:
             self.noise = self.gen_noise(self.noise_mean, self.noise_std)[1]
+            y += self.noise
 
-        return y + self.noise
+        return y
 
 # Reverse Duffing Oscillator
+
+
 class RevDuff(System):
     def __init__(self, add_noise=False, noise_mean=0, noise_std=0.01):
         self.y_size = 1
