@@ -1,17 +1,17 @@
 import numpy as np 
 import os
-
+from typing import Callable, Optional
 # Runge-Kutta 4
-def RK4(f, a, b, N, v, inputs):
+def RK4(f:Callable, a:int, b:int, N:int, v:int, inputs:Optional[np.array]):
     h = (b-a) / N
     x = [v]
     t = [a]
     u = 0
         
-    for i in range(0,N):
+    for _ in range(0,N):
         if inputs != None:
-            #u = np.array([inputs(t[-1])])
             u = np.array(inputs(t[-1]))
+
         k1 = f(u, v)
         k2 = f(u, v + h/2*k1)
         k3 = f(u, v + h/2*k2)
@@ -31,20 +31,25 @@ def KKL_observer_data(M, K, y, a, b, ic, N):
     size_z = M.shape[0]
     h = (b-a) / N
     
-    #Check if y is scalar or vector
-    if y.ndim > 2:                                    # Reshape y from (m,) --> (m, 1) for matrix multiplication
-        f = lambda y,z: np.matmul(M,z) + np.matmul(K, np.expand_dims(y,1))  
+    # check if y is scalar or vector
+    if y.ndim > 2:                                    
+        # Reshape y from (m,) --> (m, 1) for matrix multiplication
+        f = lambda y, z: np.matmul(M,z) + np.matmul(K, np.expand_dims(y,1))  
+        
     else:
-        f = lambda y,z: np.matmul(M,z) + K*y 
+        f = lambda y, z: np.matmul(M,z) + K*y 
         scalar_y = True
         
     for output, init in zip(y, ic):
         x = [np.ndarray.tolist(init)]
         v = np.array(x).T
+        
         if scalar_y == True:
             truncated_output = np.delete(output,0)    # Ignore the first output value as we already have the initial conditions
+        
         else:
             truncated_output = output[1:, :]
+        
         for i in truncated_output:
             k1 = f(i, v)
             k2 = f(i, v + h/2*k1)
@@ -111,7 +116,7 @@ def calc_neg_t(M:np.ndarray, z_max:int, e:int) -> int:
     
     return t
 
-def listdir_filter(path):
+def listdir_filter(path:str):
     filtered_listdir = []
     for f in os.listdir(path):
         if not f.startswith('.'):
