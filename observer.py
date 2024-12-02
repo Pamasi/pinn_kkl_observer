@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-import data_generation as data
+import util as data
 from torch.autograd.functional import jacobian
 
 

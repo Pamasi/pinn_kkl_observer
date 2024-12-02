@@ -1,9 +1,8 @@
 import torch
-import Loss_Calculator as L
-from Loss_functions import *
+from loss import *
 from typing import TYPE_CHECKING, Optional
-from Dataset import DataSet
-from NN import Main_Network
+from dataset import DataSet
+from neural_network import MainNetwork
 
 
 class Trainer:
@@ -20,7 +19,7 @@ class Trainer:
     optimizer: torch.optim
         Torch optimizer object.
 
-    net: Main_Network
+    net: MainNetwork
         Neural network object from NN.py.
 
     loss_fn: torch.nn
@@ -47,7 +46,7 @@ class Trainer:
         If sum, the sum of the loss of each batch is used instead.
     """
 
-    def __init__(self, dataset: DataSet, epochs: int, optimizer: torch.optim, net: Main_Network, loss_fn: torch.nn, batch_size: int, lmbda: int, method: str, shuffle: bool = True, scheduler: Optional[None] = None, reduction: str = 'mean') -> None:
+    def __init__(self, dataset: DataSet, epochs: int, optimizer: torch.optim, net: MainNetwork, loss_fn: torch.nn, batch_size: int, lmbda: int, method: str, shuffle: bool = True, scheduler: Optional[None] = None, reduction: str = 'mean') -> None:
         self.device = torch.device(
             'cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -58,7 +57,7 @@ class Trainer:
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.net = net.to(self.device)
-        self.loss_calculator = L.Loss_Calculator(
+        self.loss_calculator = LossCalculator(
             loss_fn, self.net, self.dataset, self.device, method)
         self.normalizer = net.normalizer
         self.reduction = reduction

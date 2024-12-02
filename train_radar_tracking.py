@@ -1,12 +1,12 @@
 import sys
 import torch
 from torch import nn
-import Systems
+import systems
 import numpy as np
-from NN import Main_Network
-from Dataset import DataSet
-from Normalizer import Normalizer
-from Trainer import Trainer
+from neural_network import MainNetwork
+from dataset import DataSet
+from normalizer import Normalizer
+from trainer import Trainer
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import torch.nn.functional as F
 
@@ -38,7 +38,7 @@ def main():
     N = 1000        # Number of intervals for RK4
     num_ic = 50
 
-    radar_system = Systems.TrackingRadar()
+    radar_system = systems.TrackingRadar()
     # A and B matricies
     A = np.array(np.diag(-np.arange(1, radar_system.z_size + 1, 1)))
 
@@ -58,8 +58,8 @@ def main():
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     normalizer = Normalizer(dataset, device)
-    main_net = Main_Network(x_size, z_size, num_hidden,
-                            hidden_size, activation, normalizer)
+    main_net = MainNetwork(x_size, z_size, num_hidden,
+                           hidden_size, activation, normalizer)
 
     epochs = 15
     learning_rate = 0.001
