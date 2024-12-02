@@ -1,7 +1,7 @@
 import torch
-import data_generation as data
+import util as data
 import numpy as np
-from Systems import System
+from systems import System
 
 class DataSet(torch.utils.data.Dataset):
     """

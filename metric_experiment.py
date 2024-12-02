@@ -1,12 +1,12 @@
 import sys
 import torch
-import Systems
+import systems
 import numpy as np
 import scipy.io as spio
-import Observer
-from Observer import System_z, Observer
-from Dataset import DataSet
-from data_generation import sample_circular, listdir_filter
+import observer
+from observer import System_z, Observer
+from dataset import DataSet
+from util import sample_circular, listdir_filter
 
 instructions = """To run the script, create a path and download the repository contents. Place the trained models
 in a seperate directory. Run python metric_experiment.py arg1 arg2 arg3
@@ -20,9 +20,11 @@ def main():
     save_dir = sys.argv[2]
     file_name = sys.argv[3] 
 
-     # System setup 
-    sys_dim5 = Systems.RevDuff(add_noise=False)
+    # System setup 
+    sys_dim5 = systems.RevDuff(add_noise=False)
     n_z = sys_dim5.z_size;
+
+    # TODO: understand how the choice under this filter
     # A and B matricies 
     A = np.array([-6.5549,  4.6082, -5.2057, 3.3942, 6.0211,
                   -10.9772, -2.3362, -3.7164, -3.9566, -3.7166,
@@ -51,7 +53,7 @@ def main():
     # Create observers from models
     observers = []
     for model in models:
-        observers.append(Observer(sys_dim5, z_sys5, model, a, b, N, init_z_zero=False))
+        observers.append(observer(sys_dim5, z_sys5, model, a, b, N, init_z_zero=False))
 
     delta = np.arange(0,10.5,0.5)
     test_ic = sample_circular(delta, 10)
