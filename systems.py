@@ -64,13 +64,68 @@ class System:
 # --------------- Autonomous Systems ---------------
 
 
+class MonoSLAM(System):
+    def __init__(self, n_feature=100, add_noise=False, noise_mean=0, noise_std=0.01):
+        # reference: https://www.doc.ic.ac.uk/~ajd/Publications/davison_etal_pami2007.pdf
+        self.n_feature = 100
+        self.y_size = n_angular_measure
+
+        dim_camera_state = 13
+        self.x_size = dim_camera_state + n_feature
+
+        # choose the latent mapping as done in paper
+        self.z_size = self.y_size*(2*self.x_size + 1)
+
+        self.input = None
+        self.add_noise = add_noise
+        self.noise = 0
+
+        # TODO: noise is angular and linear
+        self.noise_mean = noise_mean
+        self.noise_std = noise_std
+
+        self.sample_time = 10e3
+
+        super().__init__(self.function, self.output)
+
+    def function(self, u, x):
+
+        # need to discretize the system use PINN
+        r_old = x[0:3]
+        q_old = x[4:8] 
+        v_old = x[7:9]
+
+        r_new = (r_old + v_old)*self.sample_time
+
+        q_new = (q_new + ...)*self.sample_time
+        v_new = x[7:9];
+        omega_new = omega_new[10:]
+
+        # apply finite element :https://www.ijcai.org/proceedings/2024/0497.pdf
+        x_new[0:3] = r_new
+        pass
+
+        if self.add_noise:
+            pass
+
+    def output(self, x):
+
+        azimuth = atan2(x[2], x[0])
+        range = sqrt(x[2]**2 + x[0]**2)
+
+        y = [azimuth, range]
+
+        if self.add_noise:
+            pass
+
+
 class TrackingRadar(System):
     def __init__(self, n_axis=2, n_angular_measure=2, add_noise=False, noise_mean=0, noise_std=0.01):
         # 2D Motion
         self.y_size = n_angular_measure
         self.x_size = n_axis*2
 
-        # choose the latent mapping as done in paper 
+        # choose the latent mapping as done in paper
         self.z_size = self.y_size*(2*self.x_size + 1)
 
         self.input = None
