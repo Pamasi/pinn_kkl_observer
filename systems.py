@@ -1,7 +1,7 @@
 import numpy as np
 from smt.sampling_methods import LHS
 from util import RK4
-from math import atan2, sqrt
+from math import atan2, sqrt, cos, sin
 """
 Systems are implemented by defining 6 essential parameters:
 
@@ -92,21 +92,34 @@ class MonoSLAM(System):
 
         # need to discretize the system use PINN
         r_old = x[0:3]
-        q_old = x[4:8] 
+        q_old = x[3:7]
         v_old = x[7:9]
+        omega_old = x[10:]
 
         r_new = (r_old + v_old)*self.sample_time
 
-        q_new = (q_new + ...)*self.sample_time
-        v_new = x[7:9];
-        omega_new = omega_new[10:]
+        angle = (np.norm(omega_old)*self.sample_time)
+        q_update = np.asarray(
+            [cos(angle/2), sin(angle/2), sin(angle/2), sin(angle/2)])
+        q_new = np.cross(q_old, q_update)*self.sample_time
+        v_new = x[7:9]
+        omega_new = omega_old
 
-        # apply finite element :https://www.ijcai.org/proceedings/2024/0497.pdf
-        x_new[0:3] = r_new
-        pass
+        # apply finite element using Crank-Nicolson
+        # https://www.ijcai.org/proceedings/2024/0497.pdf
+        x_dot_list = []
+        x_dot_list[0:3] = (r_new + r_old)/2
+        x_dot_list[3:7] = (q_new + q_old)/2
+        x_dot_list[7:9] = (v_new + v_old)/2
+        x_dot_list[10:] = (omega_new + omega_old)/2
 
+        x_dot = np.asarray(x_dot_list)
+
+        # TODO add noise
         if self.add_noise:
             pass
+
+        return x_dot
 
     def output(self, x):
 
