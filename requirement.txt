@@ -2,3 +2,6 @@ smt
 torch
 numpy
 scipy
+wandb
+matplotlib
+pandas
