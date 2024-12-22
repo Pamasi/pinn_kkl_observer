@@ -5,3 +5,4 @@ __pycache__
 weight/*
 *.zip
 *.mat
+*.png
