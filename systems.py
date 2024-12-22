@@ -1,6 +1,6 @@
 import numpy as np
 from smt.sampling_methods import LHS
-from utils.common import RK4
+from utils.common import runge_kutta4
 from math import atan2, sqrt, cos, sin
 """
 Systems are implemented by defining 6 essential parameters:
@@ -30,7 +30,7 @@ class System:
         return LHS(xlimits=sample_space, random_state=seed)(samples)
 
     def simulate(self, a, b, N, v):
-        x, t = RK4(self.function, a, b, N, v, self.input)
+        x, t = runge_kutta4(self.function, a, b, N, v, self.input)
         return np.array(x), t
 
     def generate_data(self, ic, a, b, N):
@@ -143,7 +143,6 @@ class TrackingRadar(System):
 
         self.input = None
         self.add_noise = add_noise
-
 
         self.noise = 0
         self.noise_mean = noise_mean

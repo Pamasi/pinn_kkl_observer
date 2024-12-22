@@ -12,16 +12,19 @@ def get_args_parser():
     # data
     parser.add_argument('--ckpt_dir', default='debug',
                         type=str, help='directory of checkpoints')
-    parser.add_argument('--n_sample', default=1e3, type=int,
+    parser.add_argument('--n_sample', default=1000, type=int,
                         help='number of samples per simulation')
     parser.add_argument('--t_sim', default=50, type=int,
                         help='time of the simulation (second)')
 
     systems = ['radar', 'monoslam']
     parser.add_argument('--system', default='radar', choices=systems)
-    parser.add_argument('--add_noise', action='store_true', help='add gaussian noise to measurements')
-    parser.add_argument('--noise_mean', default=0, type=float, help='mean of the gaussian noise')
-    parser.add_argument('--noise_var', default=1e-3, type=float, help='variance of the gaussian noise')
+    parser.add_argument('--add_noise', action='store_true',
+                        help='add gaussian noise to measurements')
+    parser.add_argument('--noise_mean', default=0, type=float,
+                        help='mean of the gaussian noise')
+    parser.add_argument('--noise_var', default=1e-3,
+                        type=float, help='variance of the gaussian noise')
 
     # network
 
@@ -113,8 +116,7 @@ def get_ckpt_dir(epoch: int, dir: str = '') -> str:
     return osp.join(getcwd(), f'{dir}/ckpt_{epoch}', )
 
 
-# Runge-Kutta 4
-def RK4(f: Callable, a: int, b: int, N: int, v: int, inputs: Optional[np.array]):
+def runge_kutta4(f: Callable, a: int, b: int, N: int, v: int, inputs: Optional[np.array]):
     h = (b-a) / N
     x = [v]
     t = [a]

@@ -50,8 +50,8 @@ def experiment(args: argparse.Namespace):
 
     # parameter for LHS
     a = 0   # start
-    b = 50  # end
-    N = 1000        # Number of intervals for RK4
+    b = args.t_sim  # end
+    N = args.n_sample      # Number of intervals for runge_kutta4
     num_ic = 50
 
     if args.add_noise:
@@ -68,7 +68,7 @@ def experiment(args: argparse.Namespace):
     else:
         raise ValueError('System still not implemented')
 
-    dataset = DataSet(system, A, B, a, b, N, num_ic, limits, args.seed)
+    dataset = DataSet(system, A, B, a, b, N, num_ic, limits, seed=args.seed)
 
     print('Dataset sucessfully generated.', '\n')
 
