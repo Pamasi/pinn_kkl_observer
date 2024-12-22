@@ -1,9 +1,13 @@
 import argparse
+import sys
 from os import getcwd, mkdir, listdir
 import os.path as osp
 import numpy as np
 import torch
+import wandb
 from typing import Any, Optional, Callable, Optional
+
+import wandb.wandb_run
 
 
 def get_args_parser():
@@ -114,6 +118,22 @@ def get_ckpt_dir(epoch: int, dir: str = '') -> str:
         mkdir(osp.join(getcwd(), dir))
 
     return osp.join(getcwd(), f'{dir}/ckpt_{epoch}', )
+
+
+def config_wandb(args: argparse.Namespace) -> wandb.wandb_run.Run:
+    print(sys.executable)
+    wandb.login()
+    wandb_run_name = f'PINN_{args.system}_NH{args.n_hidden}_HS{args.hidden_size}_AF{str(args.activation_fcn).upper()}_LR{args.lr}'
+
+    wandb_tag = [f'{param}@{val}' for param, val in vars(args).items()]
+
+    wandb_run = wandb.init(project='pinn_kkl_observer', config=args,
+                           name=wandb_run_name,  reinit=True, tags=wandb_tag)
+
+    # automate the name folder
+    args.dir = str(wandb_run_name).replace(".", "_").replace('-', 'm')
+
+    return wandb_run
 
 
 def runge_kutta4(f: Callable, a: int, b: int, N: int, v: int, inputs: Optional[np.array]):

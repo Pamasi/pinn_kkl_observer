@@ -12,18 +12,21 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 import torch.nn.functional as F
 import wandb
 
+
+from loss import *
+from typing import TYPE_CHECKING, Optional
+from tqdm import trange
+from utils.dataset import DataSet
+from utils.common import save_ckpt
+from neural_network import MainNetwork
+
+
 from neural_network import MainNetwork
 
 from utils.dataset import DataSet
-from utils.common import get_args_parser
+from utils.common import get_args_parser, config_wandb
 from normalizer import Normalizer
 from trainer import Trainer
-
-
-instructions = """To run the script, create a path and download the repository contents.
-Run python train_tracking_radar.py arg1 arg2
-    arg1 = Location to store the trained model.
-    arg2 = Training method, either supervised_NN, unsupervised_AE or supervised_PINN."""
 
 
 torch.backends.cuda.matmul.allow_tf32 = True
@@ -35,10 +38,98 @@ torch.backends.cudnn.benchmark = False
 os.environ["WANDB_START_METHOD"] = "thread"
 
 
+def train(net, loss_calc, n_epoch, train_set, optimizer, scheduler,
+          device, args: argparse.Namespace, normalizer=None, with_pde=False, pde1=None, wandb_run: wandb.wandb_run.Run = None) -> None:
+    """
+    Training loop.
+    """
+    MSE = MSELoss(loss_calc)
+
+    loss_train = 0.0
+    loss_best = 0.0
+
+    for epoch in trange(n_epoch):
+        loss_epoch = 0.0
+
+        for idx, data in enumerate(train_set):
+
+            # Normal and physics data
+            x, z, y, x_ph, y_ph = data
+
+            x, z, y = x.to(device), z.to(device), y.to(device)
+
+            if with_pde:
+                x_ph, y_ph = x_ph.to(device), y_ph.to(device)
+
+                assert x_ph.device.type == "cuda", "not cuda as default device"
+                assert y_ph.device.type == "cuda", "not cuda as default device"
+
+            optimizer.zero_grad()
+            net.mode = 'normal'
+
+            z_hat, x_hat, norm_z_hat, norm_x_hat = net(x)
+            if normalizer != None:
+                label_x = normalizer.Normalize(
+                    x, mode='normal').float()
+                label_z = normalizer.Normalize(
+                    z, mode='normal').float()
+            else:
+                label_x = x
+                label_z = z
+
+            # Compute MSE loss
+            loss_normal = MSE(norm_x_hat, norm_z_hat, label_x, label_z)
+
+            # Compute physics loss
+            net.mode = 'physics'
+            z_hat_ph = net(x_ph)[0]
+            loss_pde1 = pde1(x_ph, y_ph, z_hat_ph)
+            # loss_pde2 = pde2(x_ph, z_hat_ph)
+            loss = loss_normal + loss_pde1  # + loss_pde2
+
+            loss_epoch += loss
+            loss.backward()
+            optimizer.step()
+            # print(pde1.lagrange)
+
+        # mean loss
+        loss_epoch = (loss_epoch / idx).item()
+
+        if scheduler is not None:
+            scheduler.step(loss_epoch)
+
+        if epoch % 5 == 0:
+            save_ckpt(net, epoch, loss_epoch, scheduler,
+                      args.ckpt_dir, optimizer.state_dict())
+
+        if (epoch > 0) and (loss_epoch < loss_best):
+            loss_best = loss_epoch
+
+            save_ckpt(net, epoch, loss_epoch, scheduler, args.ckpt_dir,
+                      optimizer.state_dict(), save_best=True)
+
+        else:
+            loss_best = loss_epoch
+
+        dict_log = {
+            "lr": scheduler.get_last_lr()[0],
+            "train/loss/mse": loss_epoch,
+            "train/loss/pde": loss_pde1
+        }
+
+        if args.no_track == False:
+            wandb.log(dict_log)
+
+            wandb_run.log_code()
+
+        else:
+            print(dict_log)
+
+
 def experiment(args: argparse.Namespace):
     torch.manual_seed(9)
 
-    save_dir = args.ckpt_dir
+    # save_dir = args.ckpt_dir
     method = args.method
 
     # --------------------- System Setup ---------------------
@@ -100,12 +191,31 @@ def experiment(args: argparse.Namespace):
     random.seed(args.seed)
     np.random.seed(args.seed)
 
-    trainer = Trainer(dataset, args.n_epoch, optimizer, main_net,
-                      loss_fn, args.batch, args.lmbda, method, scheduler=scheduler)
+    # ------ Wandb Loggin ------------------------
+    if args.no_track == False:
+        wandb_run = config_wandb(args)
+
+    # trainer = Trainer(dataset, args.n_epoch, optimizer, main_net,
+    #                   loss_fn, args.batch, args.lmbda, method, scheduler=scheduler)
+
+    train_set = torch.utils.data.DataLoader(dataset, args.batch, shuffle=True)
+
+    main_net.to(device)
+    loss_calculator = LossCalculator(
+        loss_fn, main_net, dataset, device, method)
+
+    pde1 = PdeLoss_xz(dataset.M, dataset.K, dataset.system,
+                      loss_calculator, args.lmbda, reduction='mean')
+
+    # we analyze only PINN network
+    with_pde = True  # False if method == 'supervised_NN' else True
+
+    print('Device:', device)
 
     print('Training is starting.', '\n')
-    trainer.train()
-    torch.save(main_net, save_dir+'/'+method)
+
+    train(main_net, loss_calculator, args.n_epoch, train_set, optimizer,
+          scheduler, device, args, normalizer, with_pde, pde1, wandb_run)
 
     print('Training complete.', '\n')
 

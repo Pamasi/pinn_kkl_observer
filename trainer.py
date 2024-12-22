@@ -1,7 +1,6 @@
 import torch
 from loss import *
 from typing import TYPE_CHECKING, Optional
-
 from utils.dataset import DataSet
 from neural_network import MainNetwork
 
