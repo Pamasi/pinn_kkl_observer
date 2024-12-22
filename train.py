@@ -1,14 +1,14 @@
-import sys
-import argparse
+import sys, os, argparse
 
 import torch
 from torch import nn
 import systems
 import numpy as np
+import random
 
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import torch.nn.functional as F
-
+import wandb
 
 from neural_network import MainNetwork
 
@@ -28,6 +28,9 @@ torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
 # to enable reproducibility
 torch.backends.cudnn.benchmark = False
+
+
+os.environ["WANDB_START_METHOD"] = "thread"
 
 
 def experiment(args: argparse.Namespace):
@@ -58,8 +61,8 @@ def experiment(args: argparse.Namespace):
 
     else:
         raise ValueError('System still not implemented')
-    dataset = DataSet(system, A, B, a, b, N, num_ic, limits,
-                      PINN_sample_mode='split traj', data_gen_mode='negative forward')
+
+    dataset = DataSet(system, A, B, a, b, N, num_ic, limits, args.seed)
 
     print('Dataset sucessfully generated.', '\n')
 
@@ -87,6 +90,10 @@ def experiment(args: argparse.Namespace):
         patience=args.patiente_scheduler, threshold=args.threshold_scheduler,
         verbose=True)
     loss_fn = nn.MSELoss(reduction='mean')
+
+    # reproducibility
+    torch.manual_seed(args.seed)
+    random.seed(args.seed)
 
     trainer = Trainer(dataset, args.n_epoch, optimizer, main_net,
                       loss_fn, args.batch, args.lmbda, method, scheduler=scheduler)

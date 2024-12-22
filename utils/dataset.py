@@ -52,7 +52,12 @@ class DataSet(torch.utils.data.Dataset):
         used to simulate z system forward to obtain z(0).
     """
 
-    def __init__(self, system: System, M: np.ndarray, K: np.ndarray, a: int, b: int, N: int, samples: int, limits_normal: np.ndarray, PINN_sample_mode: str = 'split traj', data_gen_mode: str = 'negative forward') -> None:
+    def __init__(self, system: System, M: np.ndarray, K: np.ndarray, 
+                 a: int, b: int, N: int, samples: int, 
+                 limits_normal: np.ndarray, 
+                 seed: int,
+                 PINN_sample_mode: str = 'split traj', 
+                 data_gen_mode: str = 'negative forward') -> None:
         super().__init__()
         self.M = M
         self.K = K
@@ -65,7 +70,7 @@ class DataSet(torch.utils.data.Dataset):
         self.PINN_sample_mode = PINN_sample_mode
         self.data_gen_mode = data_gen_mode
         # Generate synthetic data x, z, y
-        self.train_data = self.generate_data(seed=888)
+        self.train_data = self.generate_data(seed=seed)
         # Total number of samples
         self.data_length = self.train_data[0].shape[0] * \
             self.train_data[0].shape[1]
