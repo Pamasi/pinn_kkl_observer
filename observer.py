@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-import util as data
+import utils.common as data
 from torch.autograd.functional import jacobian
 
 
@@ -122,7 +122,8 @@ class Observer:
 
         """
         x, y, t = self.system.generate_data(ic, self.a, self.b, self.N)
-        x = torch.from_numpy(np.reshape(x, (self.N+1, self.system.x_size))).to(self.device)
+        x = torch.from_numpy(np.reshape(
+            x, (self.N+1, self.system.x_size))).to(self.device)
         if add_noise:
             np.random.seed(123)
             noise = np.random.normal(

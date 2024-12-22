@@ -1,6 +1,6 @@
 import numpy as np
 from smt.sampling_methods import LHS
-from util import RK4
+from utils.common import RK4
 from math import atan2, sqrt, cos, sin
 """
 Systems are implemented by defining 6 essential parameters:

@@ -5,8 +5,8 @@ import numpy as np
 import scipy.io as spio
 import observer
 from observer import System_z, Observer
-from dataset import DataSet
-from util import sample_circular, listdir_filter
+from utils.dataset import DataSet
+from utils.common import sample_circular, listdir_filter
 
 instructions = """To run the script, create a path and download the repository contents. Place the trained models
 in a seperate directory. Run python metric_experiment.py arg1 arg2 arg3
