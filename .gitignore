@@ -6,3 +6,5 @@ weight/*
 *.zip
 *.mat
 *.png
+*train_wandb_*
+wandb/*
