@@ -143,6 +143,8 @@ class TrackingRadar(System):
 
         self.input = None
         self.add_noise = add_noise
+
+
         self.noise = 0
         self.noise_mean = noise_mean
         self.noise_std = noise_std

@@ -1,11 +1,13 @@
-import sys, os, argparse
+import sys
+import os
+import argparse
 
 import torch
 from torch import nn
 import systems
 import numpy as np
 import random
-
+import math
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import torch.nn.functional as F
 import wandb
@@ -52,8 +54,12 @@ def experiment(args: argparse.Namespace):
     N = 1000        # Number of intervals for RK4
     num_ic = 50
 
+    if args.add_noise:
+        print(
+            f'Noise mean:({args.noise_mean})\tvariance:({args.noise_var})')
     if str(args.system).endswith('radar'):
-        system = systems.TrackingRadar()
+        system = systems.TrackingRadar(
+            add_noise=args.add_noise, noise_mean=args.noise_mean, noise_std=math.sqrt(args.noise_var))
         # A and B matricies
         A = np.array(np.diag(-np.arange(1, system.z_size + 1, 1)))
 
@@ -69,8 +75,6 @@ def experiment(args: argparse.Namespace):
     # --------------------- Training Setup ---------------------
     x_size = dataset.system.x_size
     z_size = dataset.system.z_size
-    num_hidden = 5
-    hidden_size = 50
 
     if str(args.activation_fcn) == 'relu':
         activation = F.relu
@@ -94,9 +98,12 @@ def experiment(args: argparse.Namespace):
     # reproducibility
     torch.manual_seed(args.seed)
     random.seed(args.seed)
+    np.random.seed(args.seed)
 
     trainer = Trainer(dataset, args.n_epoch, optimizer, main_net,
                       loss_fn, args.batch, args.lmbda, method, scheduler=scheduler)
+
+    print('Training is starting.', '\n')
     trainer.train()
     torch.save(main_net, save_dir+'/'+method)
 

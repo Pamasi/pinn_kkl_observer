@@ -19,6 +19,9 @@ def get_args_parser():
 
     systems = ['radar', 'monoslam']
     parser.add_argument('--system', default='radar', choices=systems)
+    parser.add_argument('--add_noise', action='store_true', help='add gaussian noise to measurements')
+    parser.add_argument('--noise_mean', default=0, type=float, help='mean of the gaussian noise')
+    parser.add_argument('--noise_var', default=1e-3, type=float, help='variance of the gaussian noise')
 
     # network
 

@@ -125,7 +125,7 @@ class Observer:
         x = torch.from_numpy(np.reshape(
             x, (self.N+1, self.system.x_size))).to(self.device)
         if add_noise:
-            np.random.seed(123)
+            #np.random.seed(123)
             noise = np.random.normal(
                 noise_mean, noise_std, y.shape)    # Adding Noise
            # noise = np.random.normal(0, 0.05, y.shape)    # Adding Noise
