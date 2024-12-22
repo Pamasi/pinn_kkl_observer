@@ -14,7 +14,7 @@ import wandb
 
 
 from loss import *
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, Tuple
 from tqdm import trange
 from utils.dataset import DataSet
 from utils.common import save_ckpt
@@ -23,10 +23,8 @@ from neural_network import MainNetwork
 
 from neural_network import MainNetwork
 
-from utils.dataset import DataSet
 from utils.common import get_args_parser, config_wandb
 from normalizer import Normalizer
-from trainer import Trainer
 
 
 torch.backends.cuda.matmul.allow_tf32 = True
@@ -38,21 +36,21 @@ torch.backends.cudnn.benchmark = False
 os.environ["WANDB_START_METHOD"] = "thread"
 
 
-def train(net, loss_calc, n_epoch, train_set, optimizer, scheduler,
-          device, args: argparse.Namespace, normalizer=None, with_pde=False, pde1=None, wandb_run: wandb.wandb_run.Run = None) -> None:
-    """
-    Training loop.
+def val_step(model, loss_calc, val_loader, device, normalizer=None,
+             with_pde=False, pde1=None) -> Tuple[torch.Tensor]:
+    """Generate the validation of different episode
     """
     MSE = MSELoss(loss_calc)
 
-    loss_train = 0.0
-    loss_best = 0.0
+    loss_tot = 0.0
+    loss_mse = 0.0
+    loss_pde = 0.0
+    n_batch = len(val_loader)
 
-    for epoch in trange(n_epoch):
-        loss_epoch = 0.0
-
-        for idx, data in enumerate(train_set):
-
+    model.eval()
+    # to reduce memory footprint
+    with torch.no_grad():
+        for data in val_loader:
             # Normal and physics data
             x, z, y, x_ph, y_ph = data
 
@@ -61,13 +59,13 @@ def train(net, loss_calc, n_epoch, train_set, optimizer, scheduler,
             if with_pde:
                 x_ph, y_ph = x_ph.to(device), y_ph.to(device)
 
+                # sanity check
                 assert x_ph.device.type == "cuda", "not cuda as default device"
                 assert y_ph.device.type == "cuda", "not cuda as default device"
 
-            optimizer.zero_grad()
-            net.mode = 'normal'
+            model.mode = 'normal'
 
-            z_hat, x_hat, norm_z_hat, norm_x_hat = net(x)
+            z_hat, x_hat, norm_z_hat, norm_x_hat = model(x)
             if normalizer != None:
                 label_x = normalizer.Normalize(
                     x, mode='normal').float()
@@ -78,52 +76,92 @@ def train(net, loss_calc, n_epoch, train_set, optimizer, scheduler,
                 label_z = z
 
             # Compute MSE loss
-            loss_normal = MSE(norm_x_hat, norm_z_hat, label_x, label_z)
+            loss_normal_batch = MSE(norm_x_hat, norm_z_hat, label_x, label_z)
 
             # Compute physics loss
-            net.mode = 'physics'
-            z_hat_ph = net(x_ph)[0]
-            loss_pde1 = pde1(x_ph, y_ph, z_hat_ph)
+            model.mode = 'physics'
+            z_hat_ph = model(x_ph)[0]
+            loss_pde1_batch = pde1(x_ph, y_ph, z_hat_ph)
             # loss_pde2 = pde2(x_ph, z_hat_ph)
-            loss = loss_normal + loss_pde1  # + loss_pde2
+            loss_mse += loss_normal_batch
+            loss_pde += loss_pde1_batch
 
-            loss_epoch += loss
-            loss.backward()
-            optimizer.step()
+            loss_batch = loss_normal_batch + loss_pde1_batch  # + loss_pde2
+
+            loss_tot += loss_batch
+
             # print(pde1.lagrange)
 
-        # mean loss
-        loss_epoch = (loss_epoch / idx).item()
+        # mean  batch loss
+        loss_tot /= n_batch
+        loss_mse /= n_batch
+        loss_pde /= n_batch
 
-        if scheduler is not None:
-            scheduler.step(loss_epoch)
+    return (loss_tot, loss_mse, loss_pde)
 
-        if epoch % 5 == 0:
-            save_ckpt(net, epoch, loss_epoch, scheduler,
-                      args.ckpt_dir, optimizer.state_dict())
 
-        if (epoch > 0) and (loss_epoch < loss_best):
-            loss_best = loss_epoch
+def train_step(model, loss_calc, train_loader, optimizer,
+               device,  normalizer=None, with_pde=False, pde1=None) -> Tuple[torch.Tensor]:
+    """
+    Training loop.
+    """
+    MSE = MSELoss(loss_calc)
 
-            save_ckpt(net, epoch, loss_epoch, scheduler, args.ckpt_dir,
-                      optimizer.state_dict(), save_best=True)
+    loss_tot = 0.0
+    loss_mse = 0.0
+    loss_pde = 0.0
+    n_batch = len(train_loader)
 
+    for data in train_loader:
+        # Normal and physics data
+        x, z, y, x_ph, y_ph = data
+
+        x, z, y = x.to(device), z.to(device), y.to(device)
+
+        if with_pde:
+            x_ph, y_ph = x_ph.to(device), y_ph.to(device)
+
+            assert x_ph.device.type == "cuda", "not cuda as default device"
+            assert y_ph.device.type == "cuda", "not cuda as default device"
+
+        optimizer.zero_grad()
+        model.mode = 'normal'
+
+        z_hat, x_hat, norm_z_hat, norm_x_hat = model(x)
+        if normalizer != None:
+            label_x = normalizer.Normalize(
+                x, mode='normal').float()
+            label_z = normalizer.Normalize(
+                z, mode='normal').float()
         else:
-            loss_best = loss_epoch
+            label_x = x
+            label_z = z
 
-        dict_log = {
-            "lr": scheduler.get_last_lr()[0],
-            "train/loss/mse": loss_epoch,
-            "train/loss/pde": loss_pde1
-        }
+        # Compute MSE loss
+        loss_normal_batch = MSE(norm_x_hat, norm_z_hat, label_x, label_z)
 
-        if args.no_track == False:
-            wandb.log(dict_log)
+        # Compute physics loss
+        model.mode = 'physics'
+        z_hat_ph = model(x_ph)[0]
+        loss_pde1_batch = pde1(x_ph, y_ph, z_hat_ph)
+        # loss_pde2 = pde2(x_ph, z_hat_ph)
 
-            wandb_run.log_code()
+        loss_mse += loss_normal_batch
+        loss_pde += loss_pde1_batch
 
-        else:
-            print(dict_log)
+        loss_batch = loss_normal_batch + loss_pde1_batch  # + loss_pde2
+
+        loss_tot += loss_batch
+        loss_batch.backward()
+        optimizer.step()
+        # print(pde1.lagrange)
+
+    # mean  batch loss
+    loss_tot /= n_batch
+    loss_mse /= n_batch
+    loss_pde /= n_batch
+
+    return loss_tot, loss_mse, loss_pde
 
 
 def experiment(args: argparse.Namespace):
@@ -140,32 +178,50 @@ def experiment(args: argparse.Namespace):
         [[-1000, 1000], [-100, 100], [-1000, 1000], [-100, 100]])    # Sample space
 
     # parameter for LHS
-    a = 0   # start
-    b = args.t_sim  # end
-    N = args.n_sample      # Number of intervals for runge_kutta4
+
+    # mumber of intervals for runge_kutta4
+    n_sample = args.n_sample
+
     num_ic = 50
+    # training simulation time
+    t_init_train = 0
+    t_end_train = t_init_train + args.t_sim
+
+    # validation simulation time
+    t_init_val = t_end_train + 1
+    t_end_val = t_init_val + args.t_sim
 
     if args.add_noise:
-        print(
-            f'Noise mean:({args.noise_mean})\tvariance:({args.noise_var})')
+        print(f'Noise mean:({args.noise_mean})\tvariance:({args.noise_var})')
+
     if str(args.system).endswith('radar'):
         system = systems.TrackingRadar(
             add_noise=args.add_noise, noise_mean=args.noise_mean, noise_std=math.sqrt(args.noise_var))
-        # A and B matricies
-        A = np.array(np.diag(-np.arange(1, system.z_size + 1, 1)))
-
-        B = np.ones([system.z_size, system.y_size])
 
     else:
-        raise ValueError('System still not implemented')
+        raise ValueError('System  is still not implemented')
 
-    dataset = DataSet(system, A, B, a, b, N, num_ic, limits, seed=args.seed)
+    # A and B matricies
+    A = np.array(np.diag(-np.arange(1, system.z_size + 1, 1)))
+
+    B = np.ones([system.z_size, system.y_size])
+
+    # use split based on trajector (2-step episod)
+    train_set = DataSet(system, A, B, t_init_train, t_end_train,
+                        n_sample, num_ic, limits, seed=args.seed)
+
+    val_set = DataSet(system, A, B, t_init_val, t_end_val,
+                      n_sample, num_ic, limits, seed=args.seed)
 
     print('Dataset sucessfully generated.', '\n')
 
+    # --------------------- Wandb Logging ---------------------
+    if args.no_track == False:
+        wandb_run = config_wandb(args)
+
     # --------------------- Training Setup ---------------------
-    x_size = dataset.system.x_size
-    z_size = dataset.system.z_size
+    x_size = train_set.system.x_size
+    z_size = train_set.system.z_size
 
     if str(args.activation_fcn) == 'relu':
         activation = F.relu
@@ -175,15 +231,23 @@ def experiment(args: argparse.Namespace):
 
     device = torch.device(args.device)
 
-    normalizer = Normalizer(dataset, device)
-    main_net = MainNetwork(x_size, z_size, args.n_hidden,
-                           args.hidden_size, activation, normalizer)
+    if args.normalize:
+        normalizer = Normalizer(train_set, device)
 
-    optimizer = torch.optim.Adam(main_net.parameters(), lr=args.lr)
-    scheduler = ReduceLROnPlateau(
-        optimizer, mode='min', factor=args.factor_scheduler,
-        patience=args.patiente_scheduler, threshold=args.threshold_scheduler,
-        verbose=True)
+    else:
+        normalizer = None
+    
+    model = MainNetwork(x_size, z_size, args.n_hidden,
+                         args.hidden_size, activation, normalizer)
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+
+    scheduler = ReduceLROnPlateau(optimizer, mode='min',
+                                  factor=args.factor_scheduler,
+                                  patience=args.patiente_scheduler,
+                                  threshold=args.threshold_scheduler,
+                                  verbose=True)
+
     loss_fn = nn.MSELoss(reduction='mean')
 
     # reproducibility
@@ -191,38 +255,71 @@ def experiment(args: argparse.Namespace):
     random.seed(args.seed)
     np.random.seed(args.seed)
 
-    # ------ Wandb Loggin ------------------------
-    if args.no_track == False:
-        wandb_run = config_wandb(args)
+    train_loader = torch.utils.data.DataLoader(train_set, args.batch, shuffle=True)
+    val_loader = torch.utils.data.DataLoader(val_set, args.batch, shuffle=True)
 
-    # trainer = Trainer(dataset, args.n_epoch, optimizer, main_net,
-    #                   loss_fn, args.batch, args.lmbda, method, scheduler=scheduler)
+    model.to(device)
+    loss_train = LossCalculator(loss_fn, model, train_set, device, method)
+    loss_val = LossCalculator(loss_fn, model, val_set, device, method)
 
-    train_set = torch.utils.data.DataLoader(dataset, args.batch, shuffle=True)
+    pde1_train = PdeLoss_xz(train_set.M, train_set.K, train_set.system,
+                            loss_train, args.lmbda, reduction='mean')
 
-    main_net.to(device)
-    loss_calculator = LossCalculator(
-        loss_fn, main_net, dataset, device, method)
-
-    pde1 = PdeLoss_xz(dataset.M, dataset.K, dataset.system,
-                      loss_calculator, args.lmbda, reduction='mean')
+    pde1_val = PdeLoss_xz(val_set.M, val_set.K, val_set.system,
+                          loss_val, args.lmbda, reduction='mean')
 
     # we analyze only PINN network
     with_pde = True  # False if method == 'supervised_NN' else True
 
     print('Device:', device)
-
     print('Training is starting.', '\n')
 
-    train(main_net, loss_calculator, args.n_epoch, train_set, optimizer,
-          scheduler, device, args, normalizer, with_pde, pde1, wandb_run)
+    loss_min = 0.0
 
-    print('Training complete.', '\n')
+    for epoch in trange(args.n_epoch):
+        loss_train_tot, loss_mse_train, loss_pde_train = train_step(
+            model, loss_train, train_loader, optimizer, device, normalizer, with_pde, pde1_train)
+
+        (loss_val_tot, loss_mse_val, loss_pde_val) = val_step(
+            model, loss_val, val_loader, device, normalizer, with_pde, pde1_val)
+
+        if scheduler is not None:
+            scheduler.step(loss_mse_val)
+
+        # intermidiate saving for crash
+        if epoch % 5 == 0:
+            save_ckpt(model, epoch, loss_mse_val, optimizer,
+                      scheduler, args.ckpt_dir, torch.get_rng_state())
+
+        if (epoch > 0 and loss_mse_val < loss_min) or (epoch == 0):
+            loss_min = loss_mse_val
+
+            save_ckpt(model, epoch, loss_mse_val, optimizer,
+                      scheduler, args.ckpt_dir, torch.get_rng_state(), save_best=True)
+
+        dict_log = {
+            "train/loss/total": loss_train_tot,
+            "train/loss/mse": loss_mse_train,
+            "train/loss/pde": loss_pde_train,
+            "val/loss/total": loss_val_tot,
+            "val/loss/mse": loss_mse_val,
+            "val/loss/pde": loss_pde_val
+        }
+
+        if args.no_track == False:
+            wandb.log(dict_log)
+
+            wandb_run.log_code()
+
+        else:
+            print(dict_log)
+
+    print('Training is completed.', '\n')
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
-        'PINN-TrackingRadar', parents=[get_args_parser()])
+        'PINN-Obsever', parents=[get_args_parser()])
     args = parser.parse_args()
 
     experiment(args)
