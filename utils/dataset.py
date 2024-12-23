@@ -3,6 +3,8 @@ import utils.common as data
 import numpy as np
 from systems import System
 
+from typing import Tuple
+
 
 class DataSet(torch.utils.data.Dataset):
     """
@@ -52,11 +54,11 @@ class DataSet(torch.utils.data.Dataset):
         used to simulate z system forward to obtain z(0).
     """
 
-    def __init__(self, system: System, M: np.ndarray, K: np.ndarray, 
-                 a: int, b: int, N: int, samples: int, 
-                 limits_normal: np.ndarray, 
+    def __init__(self, system: System, M: np.ndarray, K: np.ndarray,
+                 a: int, b: int, N: int, samples: int,
+                 limits_normal: np.ndarray,
                  seed: int,
-                 PINN_sample_mode: str = 'split traj', 
+                 PINN_sample_mode: str = 'split traj',
                  data_gen_mode: str = 'negative forward') -> None:
         super().__init__()
         self.M = M
@@ -212,10 +214,13 @@ class DataSet(torch.utils.data.Dataset):
         self.output_data = (self.output_data -
                             self.mean_output) / self.std_output
 
-    def __getitem__(self, idx: int) -> None:
-        x = self.x_data[idx]
-        z = self.z_data[idx]
-        y = self.output_data[idx]
-        x_ph = self.x_data_ph[idx]
-        y_ph = self.output_data_ph[idx]
-        return [x.float(), z.float(), y.float(), x_ph.float(), y_ph.float()]
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor]:
+        x = self.x_data[idx].float()
+        z = self.z_data[idx].float()
+        y = self.output_data[idx].float()
+        x_ph = self.x_data_ph[idx].float()
+        y_ph = self.output_data_ph[idx].float()
+
+        assert torch.sum(torch.isinf(z == True)
+                         ) == 0, 'z data must be finite'
+        return (x, z, y, x_ph, y_ph)

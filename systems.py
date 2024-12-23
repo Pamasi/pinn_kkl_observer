@@ -38,13 +38,20 @@ class System:
         output = []
         for i in range(0, np.size(ic, axis=0)):
             x, t = self.simulate(a, b, N, ic[i])
-            temp = []
-            for j in x:
-                temp.append(self.output(j))
             data.append(x)
-            output.append(np.array(temp))
+            output.append(np.array([ self.output(j) for j in x ]))
 
-        return np.array(data), np.array(output), t
+        data_array = np.array(data)
+        _val = data_array[np.isinf(data_array) == True]
+        assert np.sum(np.isinf(data_array) == True) == 0, f'data generated must be finite!: {_val}'
+        
+        
+        output_array = np.array(output)
+        _val = data_array[np.isinf(output_array) == True]
+        assert np.sum(np.isinf(output_array) ==  True) == 0, f'output generated must be finite!: {_val}'
+        
+
+        return data_array, output_array, t
 
     def gen_noise(self, mean, std):
         # To generate process and measurement noise
@@ -173,7 +180,7 @@ class TrackingRadar(System):
     def output(self, x):
 
         azimuth = atan2(x[2], x[0])
-        range = sqrt(x[2]**2 + x[0]**2)
+        range = sqrt(x[2]**2 +  x[0]**2)
 
         y = [azimuth, range]
 

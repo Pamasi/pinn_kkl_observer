@@ -15,7 +15,7 @@ import wandb
 
 from loss import *
 from typing import TYPE_CHECKING, Optional, Tuple
-from tqdm import trange
+#from tqdm import trange
 from utils.dataset import DataSet
 from utils.common import save_ckpt
 from neural_network import MainNetwork
@@ -50,9 +50,8 @@ def val_step(model, loss_calc, val_loader, device, normalizer=None,
     model.eval()
     # to reduce memory footprint
     with torch.no_grad():
-        for data in val_loader:
-            # Normal and physics data
-            x, z, y, x_ph, y_ph = data
+        for (x, z, y, x_ph, y_ph)  in val_loader:
+
 
             x, z, y = x.to(device), z.to(device), y.to(device)
 
@@ -78,12 +77,13 @@ def val_step(model, loss_calc, val_loader, device, normalizer=None,
             # Compute MSE loss
             loss_normal_batch = MSE(norm_x_hat, norm_z_hat, label_x, label_z)
 
+            loss_mse += loss_normal_batch
             # Compute physics loss
             model.mode = 'physics'
             z_hat_ph = model(x_ph)[0]
             loss_pde1_batch = pde1(x_ph, y_ph, z_hat_ph)
             # loss_pde2 = pde2(x_ph, z_hat_ph)
-            loss_mse += loss_normal_batch
+
             loss_pde += loss_pde1_batch
 
             loss_batch = loss_normal_batch + loss_pde1_batch  # + loss_pde2
@@ -101,7 +101,7 @@ def val_step(model, loss_calc, val_loader, device, normalizer=None,
 
 
 def train_step(model, loss_calc, train_loader, optimizer,
-               device,  normalizer=None, with_pde=False, pde1=None) -> Tuple[torch.Tensor]:
+               device,  normalizer=None, with_pde=False, pde1=None, clip_norm = 0.1) -> Tuple[torch.Tensor]:
     """
     Training loop.
     """
@@ -112,6 +112,7 @@ def train_step(model, loss_calc, train_loader, optimizer,
     loss_pde = 0.0
     n_batch = len(train_loader)
 
+    model.train()
     for data in train_loader:
         # Normal and physics data
         x, z, y, x_ph, y_ph = data
@@ -153,8 +154,13 @@ def train_step(model, loss_calc, train_loader, optimizer,
 
         loss_tot += loss_batch
         loss_batch.backward()
+
+
+        # velocity too, gradient is clipped
+        torch.nn.utils.clip_grad_norm_(model.parameters(), clip_norm)
         optimizer.step()
         # print(pde1.lagrange)
+
 
     # mean  batch loss
     loss_tot /= n_batch
@@ -165,7 +171,11 @@ def train_step(model, loss_calc, train_loader, optimizer,
 
 
 def experiment(args: argparse.Namespace):
-    torch.manual_seed(9)
+    # reproducibility
+    torch.manual_seed(args.seed)
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+
 
     # save_dir = args.ckpt_dir
     method = args.method
@@ -175,21 +185,22 @@ def experiment(args: argparse.Namespace):
     print('Generating Data.', '\n')
     # set of initial condition among which the LHS is performed
     limits = limits = np.array(
-        [[-1000, 1000], [-100, 100], [-1000, 1000], [-100, 100]])    # Sample space
+        [[-1, 1], [-1, 1], [-1, 1], [-1, 1]])    # Sample space
 
     # parameter for LHS
 
     # mumber of intervals for runge_kutta4
     n_sample = args.n_sample
 
-    num_ic = 50
+
+    n_init_cond = 50
     # training simulation time
     t_init_train = 0
     t_end_train = t_init_train + args.t_sim
 
     # validation simulation time
-    t_init_val = t_end_train + 1
-    t_end_val = t_init_val + args.t_sim
+    t_init_val = t_end_train 
+    t_end_val = t_init_val + args.t_sim 
 
     if args.add_noise:
         print(f'Noise mean:({args.noise_mean})\tvariance:({args.noise_var})')
@@ -208,10 +219,10 @@ def experiment(args: argparse.Namespace):
 
     # use split based on trajector (2-step episod)
     train_set = DataSet(system, A, B, t_init_train, t_end_train,
-                        n_sample, num_ic, limits, seed=args.seed)
+                        n_sample, n_init_cond, limits, seed=args.seed)
 
     val_set = DataSet(system, A, B, t_init_val, t_end_val,
-                      n_sample, num_ic, limits, seed=args.seed)
+                      n_sample, n_init_cond, limits, seed=args.seed)
 
     print('Dataset sucessfully generated.', '\n')
 
@@ -236,9 +247,9 @@ def experiment(args: argparse.Namespace):
 
     else:
         normalizer = None
-    
+
     model = MainNetwork(x_size, z_size, args.n_hidden,
-                         args.hidden_size, activation, normalizer)
+                        args.hidden_size, activation, normalizer)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
@@ -250,12 +261,9 @@ def experiment(args: argparse.Namespace):
 
     loss_fn = nn.MSELoss(reduction='mean')
 
-    # reproducibility
-    torch.manual_seed(args.seed)
-    random.seed(args.seed)
-    np.random.seed(args.seed)
 
-    train_loader = torch.utils.data.DataLoader(train_set, args.batch, shuffle=True)
+    train_loader = torch.utils.data.DataLoader(
+        train_set, args.batch, shuffle=True)
     val_loader = torch.utils.data.DataLoader(val_set, args.batch, shuffle=True)
 
     model.to(device)
@@ -276,15 +284,37 @@ def experiment(args: argparse.Namespace):
 
     loss_min = 0.0
 
-    for epoch in trange(args.n_epoch):
+    for epoch in range(args.n_epoch):
         loss_train_tot, loss_mse_train, loss_pde_train = train_step(
             model, loss_train, train_loader, optimizer, device, normalizer, with_pde, pde1_train)
 
         (loss_val_tot, loss_mse_val, loss_pde_val) = val_step(
             model, loss_val, val_loader, device, normalizer, with_pde, pde1_val)
 
+        dict_log = {
+            "train/loss/total": loss_train_tot.item(),
+            "train/loss/mse": loss_mse_train.item(),
+            "train/loss/pde": loss_pde_train.item(),
+            "val/loss/total": loss_val_tot.item(),
+            "val/loss/mse": loss_mse_val.item(),
+            "val/loss/pde": loss_pde_val.item()
+        }
+
+
+        if args.no_track == False:
+            wandb.log(dict_log)
+
+            wandb_run.log_code()
+
+        else:
+            print(dict_log)
+
+
+        # when to apply scheduling: 
+        # ref https://discuss.pytorch.org/t/on-which-dataset-learning-rate-scheduler-is-applied/131259
         if scheduler is not None:
-            scheduler.step(loss_mse_val)
+            scheduler.step(loss_train_tot)
+
 
         # intermidiate saving for crash
         if epoch % 5 == 0:
@@ -297,22 +327,8 @@ def experiment(args: argparse.Namespace):
             save_ckpt(model, epoch, loss_mse_val, optimizer,
                       scheduler, args.ckpt_dir, torch.get_rng_state(), save_best=True)
 
-        dict_log = {
-            "train/loss/total": loss_train_tot,
-            "train/loss/mse": loss_mse_train,
-            "train/loss/pde": loss_pde_train,
-            "val/loss/total": loss_val_tot,
-            "val/loss/mse": loss_mse_val,
-            "val/loss/pde": loss_pde_val
-        }
 
-        if args.no_track == False:
-            wandb.log(dict_log)
 
-            wandb_run.log_code()
-
-        else:
-            print(dict_log)
 
     print('Training is completed.', '\n')
 
