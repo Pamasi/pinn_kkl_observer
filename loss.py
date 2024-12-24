@@ -4,7 +4,6 @@ import numpy as np
 from torch import nn
 
 
-
 class LossCalculator:
     def __init__(self, loss_fn, net, dataset, device, method):
         self.loss_fn = loss_fn
@@ -31,7 +30,7 @@ class LossCalculator:
         K = torch.from_numpy(K).to(self.device)
 
         # Jacobian
-        dTdx = self.calc_J(x, 'net1')
+        dTdx = self.calc_J(x, 'encoder')
 
         # Computation of f(x)
         u = 0
@@ -71,10 +70,10 @@ class LossCalculator:
     # PDE constrain loss for PINN from z --> x
     def calc_pde_loss_zx(self, x, z_hat, reduction='mean'):
         # Jacobian output of NN1 w.r.t input of NN1
-        dTdx = self.calc_J(x, 'net1')
+        dTdx = self.calc_J(x, 'encoder')
 
         # Jacobian output of NN2 w.r.t input of NN2
-        dTheta_dT = self.calc_J(z_hat, 'net2')
+        dTheta_dT = self.calc_J(z_hat, 'decoder')
 
         dTheta_dT_mul_dTdx = torch.bmm(dTheta_dT, dTdx)
 
@@ -97,12 +96,12 @@ class LossCalculator:
         return loss_pde
 
     # Jacobian calculation
-    def calc_J(self, x, NN):
+    def calc_J(self, x, FCN):
         m = x.shape[0]
-        if NN == 'net1':
-            net = self.net.net1
-        if NN == 'net2':
-            net = self.net.net2
+        if FCN == 'encoder':
+            net = self.net.encoder
+        if FCN == 'decoder':
+            net = self.net.decoder
         dTdx = jacobian(net, x, create_graph=False)    # dT/dx
         # result is m* d_o * m * d_i
         ind = torch.arange(0, m)
@@ -111,7 +110,7 @@ class LossCalculator:
 
 
 class PdeLoss_xz(nn.Module):
-    def __init__(self, M, K, system, loss_calculator, lmbda, reduction = 'mean'):
+    def __init__(self, M, K, system, loss_calculator, lmbda, reduction='mean'):
         super(PdeLoss_xz, self).__init__()
         self.M = M
         self.K = K
@@ -121,11 +120,13 @@ class PdeLoss_xz(nn.Module):
         self.lmbda = lmbda
 
     def forward(self, x, y, z_hat):
-        loss = self.loss_calc.calc_pde_loss_xz(x, y, z_hat, self.system, self.M, self.K, self.reduction)
+        loss = self.loss_calc.calc_pde_loss_xz(
+            x, y, z_hat, self.system, self.M, self.K, self.reduction)
         return self.lmbda*loss
 
+
 class PdeLoss_zx(nn.Module):
-    def __init__(self, loss_calculator, reduction = 'mean'):
+    def __init__(self, loss_calculator, reduction='mean'):
         super(PdeLoss_zx, self).__init__()
         self.loss_calc = loss_calculator
         self.reduction = reduction
@@ -134,6 +135,7 @@ class PdeLoss_zx(nn.Module):
     def forward(self, x, z_hat):
         loss = self.loss_calc.calc_pde_loss_zx(x, z_hat, self.reduction)
         return self.lmbda*loss
+
 
 class MSELoss(nn.Module):
     def __init__(self, loss_calculator):

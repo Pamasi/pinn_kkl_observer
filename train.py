@@ -18,10 +18,10 @@ from typing import TYPE_CHECKING, Optional, Tuple
 # from tqdm import trange
 from utils.dataset import DataSet
 from utils.common import save_ckpt
-from neural_network import MainNetwork
+from neural_network import EncoderDecoder
 
 
-from neural_network import MainNetwork
+from neural_network import EncoderDecoder
 
 from utils.common import get_args_parser, config_wandb
 from normalizer import Normalizer
@@ -226,7 +226,7 @@ def experiment(args: argparse.Namespace):
 
     # --------------------- Wandb Logging ---------------------
     if args.no_track == False:
-        wandb_run = config_wandb(args)
+        wandb_run, args.ckpt_dir = config_wandb(args)
 
     # --------------------- Training Setup ---------------------
     x_size = train_set.system.x_size
@@ -246,8 +246,8 @@ def experiment(args: argparse.Namespace):
     else:
         normalizer = None
 
-    model = MainNetwork(x_size, z_size, args.n_hidden,
-                        args.hidden_size, activation, normalizer)
+    model = EncoderDecoder(x_size, z_size, args.n_hidden,
+                           args.hidden_size, activation, normalizer)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
@@ -308,7 +308,7 @@ def experiment(args: argparse.Namespace):
         # when to apply scheduling:
         # ref https://discuss.pytorch.org/t/on-which-dataset-learning-rate-scheduler-is-applied/131259
         if scheduler is not None:
-            scheduler.step(loss_train_tot)
+            scheduler.step(loss_val_tot)
 
         # intermidiate saving for crash
         if epoch % 5 == 0:
