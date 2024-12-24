@@ -15,7 +15,7 @@ import wandb
 
 from loss import *
 from typing import TYPE_CHECKING, Optional, Tuple
-# from tqdm import trange
+from tqdm import trange
 from utils.dataset import DataSet
 from utils.common import save_ckpt
 from neural_network import EncoderDecoder
@@ -281,7 +281,7 @@ def experiment(args: argparse.Namespace):
 
     loss_min = 0.0
 
-    for epoch in range(args.n_epoch):
+    for epoch in trange(args.n_epoch):
         loss_train_tot, loss_mse_train, loss_pde_train = train_step(
             model, loss_train, train_loader, optimizer, device, normalizer, with_pde, pde1_train)
 
