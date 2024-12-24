@@ -8,3 +8,4 @@ weight/*
 *.png
 *train_wandb_*
 wandb/*
+ckpt*
