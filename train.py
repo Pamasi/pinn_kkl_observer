@@ -356,7 +356,7 @@ def experiment(args: argparse.Namespace):
     with_pde = True  # False if method == 'supervised_NN' else True
 
     print('Device:', device)
-    print('Training is starting.', '\n')
+
 
 
     if args.lr_range_test:
@@ -383,7 +383,8 @@ def experiment(args: argparse.Namespace):
                                     verbose=True)
 
     
-
+        print('Training is starting.', '\n')
+        
         loss_min = 0.0
 
         for epoch in trange(args.n_epoch):

@@ -2,6 +2,9 @@ import torch
 
 
 class Normalizer:
+    """
+    Normalize do avoid numerical issue between different state scalings
+    """
     def __init__(self, dataset, device):
         self.x_size = dataset.system.x_size
         self.z_size = dataset.system.z_size
