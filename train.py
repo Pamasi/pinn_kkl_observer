@@ -169,7 +169,7 @@ def train_step(model, loss_calc, train_loader, optimizer,
     return loss_tot, loss_mse, loss_pde
 
 def lr_range_test(it: int, model, loss_calc_train, loss_calc_val, train_loader, val_loader, 
-                  optimizer, device,  normalizer=None, with_pde=False, pde1_train=None, 
+                  optimizer, scheduler, device,  normalizer=None, with_pde=False, pde1_train=None, 
                   pde1_val=None, to_clip=False, clip_norm=0.1, wandb_run:wandb.wandb_run.Run=None) -> int:
     """ execute a step of one epoch
     """
@@ -229,6 +229,7 @@ def lr_range_test(it: int, model, loss_calc_train, loss_calc_val, train_loader, 
 
 
         dict_log = {
+            "lr": scheduler.get_last_lr()[0],
             "train/loss/batch/total": loss_train_batch.item(),
             "train/loss/batch/mse": loss_normal_batch.item(),
             "train/loss/batch/pde": loss_pde1_batch.item(),
@@ -369,7 +370,7 @@ def experiment(args: argparse.Namespace):
 
         for epoch in trange(args.n_epoch):
             it = lr_range_test(it, model, loss_train, loss_val, train_loader, val_loader, 
-                  optimizer, device,  normalizer, with_pde, pde1_train, 
+                  optimizer, scheduler, device,  normalizer, with_pde, pde1_train, 
                   pde1_val, to_clip=args.clip_norm, wandb_run=wandb_run)
             
 
