@@ -1,4 +1,3 @@
-import sys
 import os
 import argparse
 
@@ -230,7 +229,7 @@ def lr_range_test(it: int, model, loss_calc_train, loss_calc_val, train_loader, 
 
 
         dict_log = {
-            "train/loss/batch/total": loss_train_batch.tem(),
+            "train/loss/batch/total": loss_train_batch.item(),
             "train/loss/batch/mse": loss_normal_batch.item(),
             "train/loss/batch/pde": loss_pde1_batch.item(),
             "val/loss/batch/total": loss_tot_val.item(),
