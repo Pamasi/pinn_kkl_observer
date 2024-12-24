@@ -180,8 +180,12 @@ def experiment(args: argparse.Namespace):
 
     print('Generating Data.', '\n')
     # set of initial condition among which the LHS is performed
-    limits = np.array(
-        [[-1, 1], [-1, 1], [-1, 1], [-1, 1]])    # Sample space
+    # assumed to account also for racing drone
+    pos_limit = [-args.max_pos, args.max_pos]
+    vel_limit = [-args.max_vel, args.max_vel]
+
+    # state space domain
+    limits = np.array([pos_limit, vel_limit, pos_limit, vel_limit])    
 
     # parameter for LHS
 

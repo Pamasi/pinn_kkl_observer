@@ -38,7 +38,14 @@ def get_args_parser():
     parser.add_argument('--noise_mean', default=0, type=float,
                         help='mean of the gaussian noise')
     parser.add_argument('--noise_var', default=1e-3,
-                        type=float, help='variance of the gaussian noise')
+                        type=float, help='variance of the gaussian noise') 
+    
+    parser.add_argument('--max_vel', default=100,
+                        type=float, help='maximum velocity of the system')
+    
+    
+    parser.add_argument('--max_pos', default=1000,
+                        type=float, help='maximum position reachable of the system')
 
     # network
 
@@ -64,7 +71,7 @@ def get_args_parser():
                         type=str, help='name of the encoder model')
 
     # hyperparam
-    parser.add_argument('--n_epoch', default=100,
+    parser.add_argument('--n_epoch', default=30,
                         type=int, help='number of epochs')
     parser.add_argument('--lr', default=1e-3, type=float)
     parser.add_argument('--lmbda', default=0.1, type=float)
