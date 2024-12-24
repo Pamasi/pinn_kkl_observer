@@ -239,7 +239,7 @@ def lr_range_test(it: int, model, loss_calc_train, loss_calc_val, train_loader, 
         }
 
 
-
+        scheduler.step()
         if wandb_run == None:
             print(dict_log)
         
