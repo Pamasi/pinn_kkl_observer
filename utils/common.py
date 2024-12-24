@@ -16,9 +16,16 @@ def get_args_parser():
     # data
     parser.add_argument('--ckpt_dir', default='debug',
                         type=str, help='directory of checkpoints')
+    
+    # setup to have a 10ms of sampling time
+    parser.add_argument('--n_init_cond', default=10, type=int,
+                        help='number of initialial condition to generated: the higher is, the better') 
+    
     parser.add_argument('--n_sample', default=1000, type=int,
                         help='number of samples per simulation')
-    parser.add_argument('--t_sim', default=50, type=int,
+    
+    # suppose that after 10s the system is reinitialized
+    parser.add_argument('--t_sim', default=10, type=int,
                         help='time of the simulation (second)')
 
     systems = ['radar', 'monoslam']
@@ -59,14 +66,14 @@ def get_args_parser():
     # hyperparam
     parser.add_argument('--n_epoch', default=15,
                         type=int, help='number of epochs')
-    parser.add_argument('--lr', default=1e-3, type=float)
+    parser.add_argument('--lr', default=1e-1, type=float)
     parser.add_argument('--lmbda', default=0.1, type=float)
 
     parser.add_argument('--factor_scheduler', default=0.1, type=float)
     parser.add_argument('--threshold_scheduler', default=1e-4, type=float)
     parser.add_argument('--patiente_scheduler', default=1, type=float)
     # technicality
-    parser.add_argument('--seed', default=23, type=int, help='seed')
+    parser.add_argument('--seed', default=888, type=int, help='seed')
     parser.add_argument('--no_track', action='store_true',
                         help='disable experiment tracking')
 
@@ -141,6 +148,7 @@ def config_wandb(args: argparse.Namespace) -> wandb.wandb_run.Run:
 
 def runge_kutta4(f: Callable, a: int, b: int, N: int, v: int, inputs: Optional[np.array]):
     h = (b-a) / N
+    # print(f'h =({b}-{a}/{N}) ')
     x = [v]
     t = [a]
     u = 0

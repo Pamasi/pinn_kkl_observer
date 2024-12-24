@@ -15,7 +15,7 @@ import wandb
 
 from loss import *
 from typing import TYPE_CHECKING, Optional, Tuple
-#from tqdm import trange
+# from tqdm import trange
 from utils.dataset import DataSet
 from utils.common import save_ckpt
 from neural_network import MainNetwork
@@ -50,8 +50,7 @@ def val_step(model, loss_calc, val_loader, device, normalizer=None,
     model.eval()
     # to reduce memory footprint
     with torch.no_grad():
-        for (x, z, y, x_ph, y_ph)  in val_loader:
-
+        for (x, z, y, x_ph, y_ph) in val_loader:
 
             x, z, y = x.to(device), z.to(device), y.to(device)
 
@@ -101,7 +100,7 @@ def val_step(model, loss_calc, val_loader, device, normalizer=None,
 
 
 def train_step(model, loss_calc, train_loader, optimizer,
-               device,  normalizer=None, with_pde=False, pde1=None, clip_norm = 0.1) -> Tuple[torch.Tensor]:
+               device,  normalizer=None, with_pde=False, pde1=None, clip_norm=0.1) -> Tuple[torch.Tensor]:
     """
     Training loop.
     """
@@ -155,12 +154,10 @@ def train_step(model, loss_calc, train_loader, optimizer,
         loss_tot += loss_batch
         loss_batch.backward()
 
-
         # velocity too, gradient is clipped
         torch.nn.utils.clip_grad_norm_(model.parameters(), clip_norm)
         optimizer.step()
         # print(pde1.lagrange)
-
 
     # mean  batch loss
     loss_tot /= n_batch
@@ -176,7 +173,6 @@ def experiment(args: argparse.Namespace):
     random.seed(args.seed)
     np.random.seed(args.seed)
 
-
     # save_dir = args.ckpt_dir
     method = args.method
 
@@ -184,23 +180,25 @@ def experiment(args: argparse.Namespace):
 
     print('Generating Data.', '\n')
     # set of initial condition among which the LHS is performed
-    limits = limits = np.array(
+    limits = np.array(
         [[-1, 1], [-1, 1], [-1, 1], [-1, 1]])    # Sample space
 
     # parameter for LHS
 
     # mumber of intervals for runge_kutta4
+    # define the sampling time
     n_sample = args.n_sample
 
-
-    n_init_cond = 50
+    # reduce the number of initial condition, to lower the computational burden
+    n_init_cond = args.n_init_cond
     # training simulation time
+    # split traning and validation following literature
     t_init_train = 0
-    t_end_train = t_init_train + args.t_sim
+    t_end_train = t_init_train + args.t_sim/2
 
     # validation simulation time
-    t_init_val = t_end_train 
-    t_end_val = t_init_val + args.t_sim 
+    t_init_val = args.t_sim/2
+    t_end_val = args.t_sim
 
     if args.add_noise:
         print(f'Noise mean:({args.noise_mean})\tvariance:({args.noise_var})')
@@ -219,10 +217,10 @@ def experiment(args: argparse.Namespace):
 
     # use split based on trajector (2-step episod)
     train_set = DataSet(system, A, B, t_init_train, t_end_train,
-                        n_sample, n_init_cond, limits, seed=args.seed)
+                        n_sample, n_init_cond, limits, seed=args.seed, data_gen_mode='backward sim')
 
     val_set = DataSet(system, A, B, t_init_val, t_end_val,
-                      n_sample, n_init_cond, limits, seed=args.seed)
+                      n_sample, n_init_cond, limits, seed=args.seed, data_gen_mode='backward sim')
 
     print('Dataset sucessfully generated.', '\n')
 
@@ -260,7 +258,6 @@ def experiment(args: argparse.Namespace):
                                   verbose=True)
 
     loss_fn = nn.MSELoss(reduction='mean')
-
 
     train_loader = torch.utils.data.DataLoader(
         train_set, args.batch, shuffle=True)
@@ -300,7 +297,6 @@ def experiment(args: argparse.Namespace):
             "val/loss/pde": loss_pde_val.item()
         }
 
-
         if args.no_track == False:
             wandb.log(dict_log)
 
@@ -309,12 +305,10 @@ def experiment(args: argparse.Namespace):
         else:
             print(dict_log)
 
-
-        # when to apply scheduling: 
+        # when to apply scheduling:
         # ref https://discuss.pytorch.org/t/on-which-dataset-learning-rate-scheduler-is-applied/131259
         if scheduler is not None:
             scheduler.step(loss_train_tot)
-
 
         # intermidiate saving for crash
         if epoch % 5 == 0:
@@ -326,9 +320,6 @@ def experiment(args: argparse.Namespace):
 
             save_ckpt(model, epoch, loss_mse_val, optimizer,
                       scheduler, args.ckpt_dir, torch.get_rng_state(), save_best=True)
-
-
-
 
     print('Training is completed.', '\n')
 

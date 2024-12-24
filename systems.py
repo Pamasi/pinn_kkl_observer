@@ -47,7 +47,7 @@ class System:
         
         
         output_array = np.array(output)
-        _val = data_array[np.isinf(output_array) == True]
+        _val = output_array[np.isinf(output_array) == True]
         assert np.sum(np.isinf(output_array) ==  True) == 0, f'output generated must be finite!: {_val}'
         
 
