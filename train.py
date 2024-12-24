@@ -4,6 +4,8 @@ import argparse
 
 import torch
 from torch import nn
+from torch.utils.data import DataLoader
+import wandb.wandb_run
 import systems
 import numpy as np
 import random
@@ -14,7 +16,7 @@ import wandb
 
 
 from loss import *
-from typing import TYPE_CHECKING, Optional, Tuple
+from typing import TYPE_CHECKING, Optional, Tuple, Dict
 from tqdm import trange
 from utils.dataset import DataSet
 from utils.common import save_ckpt
@@ -100,7 +102,7 @@ def val_step(model, loss_calc, val_loader, device, normalizer=None,
 
 
 def train_step(model, loss_calc, train_loader, optimizer,
-               device,  normalizer=None, with_pde=False, pde1=None, clip_norm=0.1) -> Tuple[torch.Tensor]:
+               device,  normalizer=None, with_pde=False, pde1=None, to_clip=False, clip_norm=0.1) -> Tuple[torch.Tensor]:
     """
     Training loop.
     """
@@ -155,7 +157,8 @@ def train_step(model, loss_calc, train_loader, optimizer,
         loss_batch.backward()
 
         # velocity too, gradient is clipped
-        torch.nn.utils.clip_grad_norm_(model.parameters(), clip_norm)
+        if to_clip == True:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), clip_norm)
         optimizer.step()
         # print(pde1.lagrange)
 
@@ -166,6 +169,86 @@ def train_step(model, loss_calc, train_loader, optimizer,
 
     return loss_tot, loss_mse, loss_pde
 
+def lr_range_test(it: int, model, loss_calc_train, loss_calc_val, train_loader, val_loader, 
+                  optimizer, device,  normalizer=None, with_pde=False, pde1_train=None, 
+                  pde1_val=None, to_clip=False, clip_norm=0.1, wandb_run:wandb.wandb_run.Run=None) -> int:
+    """ execute a step of one epoch
+    """
+    MSE = MSELoss(loss_calc_train)
+
+
+
+   
+    for data in train_loader:
+        model.train()
+        # Normal and physics data
+        x, z, y, x_ph, y_ph = data
+
+        x, z, y = x.to(device), z.to(device), y.to(device)
+
+        if with_pde:
+            x_ph, y_ph = x_ph.to(device), y_ph.to(device)
+
+            assert x_ph.device.type == "cuda", "not cuda as default device"
+            assert y_ph.device.type == "cuda", "not cuda as default device"
+
+        optimizer.zero_grad()
+        model.mode = 'normal'
+
+        z_hat, x_hat, norm_z_hat, norm_x_hat = model(x)
+        if normalizer != None:
+            label_x = normalizer.Normalize(
+                x, mode='normal').float()
+            label_z = normalizer.Normalize(
+                z, mode='normal').float()
+        else:
+            label_x = x
+            label_z = z
+
+        # Compute MSE loss
+        loss_normal_batch = MSE(norm_x_hat, norm_z_hat, label_x, label_z)
+
+        # Compute physics loss
+        model.mode = 'physics'
+        z_hat_ph = model(x_ph)[0]
+        loss_pde1_batch = pde1_train(x_ph, y_ph, z_hat_ph)
+        # loss_pde2 = pde2(x_ph, z_hat_ph)
+
+     
+        loss_train_batch = loss_normal_batch + loss_pde1_batch  # + loss_pde2
+
+        loss_train_batch.backward()
+
+        # velocity too, gradient is clipped
+        if to_clip == True:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), clip_norm)
+        optimizer.step()
+
+
+        (loss_tot_val, loss_val_mse, loss_val_pde) = val_step(
+            model, loss_calc_val, val_loader, device, normalizer, with_pde, pde1_val)
+
+
+        dict_log = {
+            "train/loss/batch/total": loss_train_batch.tem(),
+            "train/loss/batch/mse": loss_normal_batch.item(),
+            "train/loss/batch/pde": loss_pde1_batch.item(),
+            "val/loss/batch/total": loss_tot_val.item(),
+            "val/loss/batch/mse": loss_val_mse.item(),
+            "val/loss/batch/pde": loss_val_pde.item()
+        }
+
+
+
+        if wandb_run == None:
+            print(dict_log)
+        
+        else:
+            wandb.log(dict_log)
+            wandb_run.log_code()
+
+
+    return it
 
 def experiment(args: argparse.Namespace):
     # reproducibility
@@ -255,17 +338,10 @@ def experiment(args: argparse.Namespace):
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
-    scheduler = ReduceLROnPlateau(optimizer, mode='min',
-                                  factor=args.factor_scheduler,
-                                  patience=args.patiente_scheduler,
-                                  threshold=args.threshold_scheduler,
-                                  verbose=True)
-
     loss_fn = nn.MSELoss(reduction='mean')
 
-    train_loader = torch.utils.data.DataLoader(
-        train_set, args.batch, shuffle=True)
-    val_loader = torch.utils.data.DataLoader(val_set, args.batch, shuffle=True)
+    train_loader = DataLoader(train_set, args.batch, shuffle=True)
+    val_loader = DataLoader(val_set, args.batch, shuffle=True)
 
     model.to(device)
     loss_train = LossCalculator(loss_fn, model, train_set, device, method)
@@ -283,49 +359,75 @@ def experiment(args: argparse.Namespace):
     print('Device:', device)
     print('Training is starting.', '\n')
 
-    loss_min = 0.0
 
-    for epoch in trange(args.n_epoch):
-        loss_train_tot, loss_mse_train, loss_pde_train = train_step(
-            model, loss_train, train_loader, optimizer, device, normalizer, with_pde, pde1_train)
+    if args.lr_range_test:
+        scheduler = torch.optim.lr_scheduler.LambdaLR(
+            optimizer, lambda step: step*2)
+        
+        it = 0
+        
+        print('Performing LR Ranging Test')
 
-        (loss_val_tot, loss_mse_val, loss_pde_val) = val_step(
-            model, loss_val, val_loader, device, normalizer, with_pde, pde1_val)
+        for epoch in trange(args.n_epoch):
+            it = lr_range_test(it, model, loss_train, loss_val, train_loader, val_loader, 
+                  optimizer, device,  normalizer, with_pde, pde1_train, 
+                  pde1_val, to_clip=args.clip_norm, wandb_run=wandb_run)
+            
 
-        dict_log = {
-            "train/loss/total": loss_train_tot.item(),
-            "train/loss/mse": loss_mse_train.item(),
-            "train/loss/pde": loss_pde_train.item(),
-            "val/loss/total": loss_val_tot.item(),
-            "val/loss/mse": loss_mse_val.item(),
-            "val/loss/pde": loss_pde_val.item()
-        }
 
-        if args.no_track == False:
-            wandb.log(dict_log)
 
-            wandb_run.log_code()
+    else:
+        scheduler = ReduceLROnPlateau(optimizer, mode='min',
+                                    factor=args.factor_scheduler,
+                                    patience=args.patiente_scheduler,
+                                    threshold=args.threshold_scheduler,
+                                    verbose=True)
 
-        else:
-            print(dict_log)
+    
 
-        # when to apply scheduling:
-        # ref https://discuss.pytorch.org/t/on-which-dataset-learning-rate-scheduler-is-applied/131259
-        if scheduler is not None:
-            scheduler.step(loss_val_tot)
+        loss_min = 0.0
 
-        # intermidiate saving for crash
-        if epoch % 5 == 0:
-            save_ckpt(model, epoch, loss_mse_val, optimizer,
-                      scheduler, args.ckpt_dir, torch.get_rng_state())
+        for epoch in trange(args.n_epoch):
+            loss_train_tot, loss_mse_train, loss_pde_train = train_step(
+                model, loss_train, train_loader, optimizer, device, normalizer, with_pde, pde1_train, to_clip=args.clip)
 
-        if (epoch > 0 and loss_mse_val < loss_min) or (epoch == 0):
-            loss_min = loss_mse_val
+            (loss_val_tot, loss_mse_val, loss_pde_val) = val_step(
+                model, loss_val, val_loader, device, normalizer, with_pde, pde1_val)
 
-            save_ckpt(model, epoch, loss_mse_val, optimizer,
-                      scheduler, args.ckpt_dir, torch.get_rng_state(), save_best=True)
+            dict_log = {
+                "train/loss/total": loss_train_tot.item(),
+                "train/loss/mse": loss_mse_train.item(),
+                "train/loss/pde": loss_pde_train.item(),
+                "val/loss/total": loss_val_tot.item(),
+                "val/loss/mse": loss_mse_val.item(),
+                "val/loss/pde": loss_pde_val.item()
+            }
 
-    print('Training is completed.', '\n')
+            if args.no_track == False:
+                wandb.log(dict_log)
+
+                wandb_run.log_code()
+
+            else:
+                print(dict_log)
+
+            # when to apply scheduling:
+            # ref https://discuss.pytorch.org/t/on-which-dataset-learning-rate-scheduler-is-applied/131259
+            if scheduler is not None:
+                scheduler.step(loss_val_tot)
+
+            # intermidiate saving for crash
+            if epoch % 5 == 0:
+                save_ckpt(model, epoch, loss_mse_val, optimizer,
+                        scheduler, args.ckpt_dir, torch.get_rng_state())
+
+            if (epoch > 0 and loss_mse_val < loss_min) or (epoch == 0):
+                loss_min = loss_mse_val
+
+                save_ckpt(model, epoch, loss_mse_val, optimizer,
+                        scheduler, args.ckpt_dir, torch.get_rng_state(), save_best=True)
+
+        print('Training is completed.', '\n')
 
 
 if __name__ == '__main__':

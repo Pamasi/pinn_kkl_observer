@@ -73,8 +73,14 @@ def get_args_parser():
     # hyperparam
     parser.add_argument('--n_epoch', default=30,
                         type=int, help='number of epochs')
+    parser.add_argument('--clip_norm', action='store_true',
+                    help='clip the gradient during backpropagation')
+    
+    parser.add_argument('--lr_range_test', action='store_true',
+                    help='enables the lr range test for cyclic lr')
+
     parser.add_argument('--lr', default=1e-3, type=float)
-    parser.add_argument('--lmbda', default=0.1, type=float)
+    parser.add_argument('--lmbda', default=0.1, type=float, help='weight of pde loss')
 
     parser.add_argument('--factor_scheduler', default=0.1, type=float)
     parser.add_argument('--threshold_scheduler', default=1e-4, type=float)
