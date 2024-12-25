@@ -16,7 +16,7 @@ import wandb
 
 from loss import *
 from typing import TYPE_CHECKING, Optional, Tuple, Dict
-from tqdm import trange
+from tqdm import trange, tqdm
 from utils.dataset import DataSet
 from utils.common import save_ckpt
 from neural_network import EncoderDecoder
@@ -168,9 +168,9 @@ def train_step(model, loss_calc, train_loader, optimizer,
 
     return loss_tot, loss_mse, loss_pde
 
-def lr_range_test(it: int, model, loss_calc_train, loss_calc_val, train_loader, val_loader, 
+def lr_range_test(model, loss_calc_train, loss_calc_val, train_loader, val_loader, 
                   optimizer, scheduler, device,  normalizer=None, with_pde=False, pde1_train=None, 
-                  pde1_val=None, to_clip=False, clip_norm=0.1, wandb_run:wandb.wandb_run.Run=None) -> int:
+                  pde1_val=None, to_clip=False, clip_norm=0.1, wandb_run:wandb.wandb_run.Run=None) -> None:
     """ execute a step of one epoch
     """
     MSE = MSELoss(loss_calc_train)
@@ -178,7 +178,7 @@ def lr_range_test(it: int, model, loss_calc_train, loss_calc_val, train_loader, 
 
 
    
-    for data in train_loader:
+    for data in tqdm(train_loader):
         model.train()
         # Normal and physics data
         x, z, y, x_ph, y_ph = data
@@ -248,7 +248,6 @@ def lr_range_test(it: int, model, loss_calc_train, loss_calc_val, train_loader, 
             wandb_run.log_code()
 
 
-    return it
 
 def experiment(args: argparse.Namespace):
     # reproducibility
@@ -361,17 +360,25 @@ def experiment(args: argparse.Namespace):
 
 
     if args.lr_range_test:
-        scheduler = torch.optim.lr_scheduler.LambdaLR(
-            optimizer, lambda step: step*2)
-        
-        it = 0
-        
-        print('Performing LR Ranging Test')
+        max_lr = 100
+        n_iter = len(train_loader)
 
-        for epoch in trange(args.n_epoch):
-            it = lr_range_test(it, model, loss_train, loss_val, train_loader, val_loader, 
-                  optimizer, scheduler, device,  normalizer, with_pde, pde1_train, 
-                  pde1_val, to_clip=args.clip_norm, wandb_run=wandb_run)
+        print(f'batch size is ={len(train_loader)}')
+        lr_step = (max_lr - args.lr)/len(train_loader);
+        print(f'lr_step ={lr_step}')
+        # scheduler = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=1.0, end_factor=lr_step, total_iters=1n_iter)
+
+        # scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, 2)
+        scheduler = torch.optim.lr_scheduler.LambdaLR(
+            optimizer, lambda step: step*lr_step)
+        
+        
+        print('Performing LR Range Test')
+
+     
+        lr_range_test(model, loss_train, loss_val, train_loader, val_loader, 
+                        optimizer, scheduler, device,  normalizer, with_pde, pde1_train, 
+                        pde1_val, to_clip=args.clip_norm, wandb_run=wandb_run)
             
 
 
@@ -384,7 +391,7 @@ def experiment(args: argparse.Namespace):
                                     verbose=True)
 
     
-        print('Training is starting.', '\n')
+        print('Training is started.', '\n')
         
         loss_min = 0.0
 
