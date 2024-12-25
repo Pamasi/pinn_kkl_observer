@@ -101,7 +101,8 @@ def val_step(model, loss_calc, val_loader, device, normalizer=None,
 
 
 def train_step(model, loss_calc, train_loader, optimizer,
-               device,  normalizer=None, with_pde=False, pde1=None, to_clip=False, clip_norm=0.1) -> Tuple[torch.Tensor]:
+               device,  normalizer=None, with_pde=False, 
+               pde1=None, to_clip=False, clip_norm=0.1, scheduler=None) -> Tuple[torch.Tensor]:
     """
     Training loop.
     """
@@ -159,6 +160,10 @@ def train_step(model, loss_calc, train_loader, optimizer,
         if to_clip == True:
             torch.nn.utils.clip_grad_norm_(model.parameters(), clip_norm)
         optimizer.step()
+
+
+        if scheduler is not None:
+            scheduler.step()
         # print(pde1.lagrange)
 
     # mean  batch loss
@@ -384,20 +389,27 @@ def experiment(args: argparse.Namespace):
 
 
     else:
-        scheduler = ReduceLROnPlateau(optimizer, mode='min',
-                                    factor=args.factor_scheduler,
-                                    patience=args.patiente_scheduler,
-                                    threshold=args.threshold_scheduler,
-                                    verbose=True)
 
-    
+        if args.one_cycle_lr:
+            scheduler =  torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=args.c_lr_max,
+                                            epochs=args.n_epoch, steps_per_epoch=len(train_loader))
+            
+        else:
+            scheduler = ReduceLROnPlateau(optimizer, mode='min',
+                                        factor=args.factor_scheduler,
+                                        patience=args.patiente_scheduler,
+                                        threshold=args.threshold_scheduler,
+                                        verbose=True)
+            
+
         print('Training is started.', '\n')
         
         loss_min = 0.0
 
         for epoch in trange(args.n_epoch):
             loss_train_tot, loss_mse_train, loss_pde_train = train_step(
-                model, loss_train, train_loader, optimizer, device, normalizer, with_pde, pde1_train, to_clip=args.clip)
+                model, loss_train, train_loader, optimizer, device, 
+                normalizer, with_pde, pde1_train, to_clip=args.clip_norm, scheduler = scheduler if args.one_cycle_lr else None)
 
             (loss_val_tot, loss_mse_val, loss_pde_val) = val_step(
                 model, loss_val, val_loader, device, normalizer, with_pde, pde1_val)
@@ -421,8 +433,7 @@ def experiment(args: argparse.Namespace):
 
             # when to apply scheduling:
             # ref https://discuss.pytorch.org/t/on-which-dataset-learning-rate-scheduler-is-applied/131259
-            if scheduler is not None:
-                scheduler.step(loss_val_tot)
+
 
             # intermidiate saving for crash
             if epoch % 5 == 0:

@@ -62,7 +62,7 @@ def get_args_parser():
                         the directory previously created for the current configuration')
 
     # config
-    parser.add_argument('--batch', default=32, type=int, help='batch size')
+    parser.add_argument('--batch', default=2048, type=int, help='batch size')
     parser.add_argument('--num_workers', default=2,
                         type=int, help='number of workers')
     parser.add_argument('--device', default='cuda',
@@ -71,15 +71,21 @@ def get_args_parser():
                         type=str, help='name of the encoder model')
 
     # hyperparam
-    parser.add_argument('--n_epoch', default=30,
+    parser.add_argument('--n_epoch', default=100,
                         type=int, help='number of epochs')
     parser.add_argument('--clip_norm', action='store_true',
                     help='clip the gradient during backpropagation')
     
     parser.add_argument('--lr_range_test', action='store_true',
                     help='enables the lr range test for cyclic lr')
+    
+    parser.add_argument('--one_cycle_lr', action='store_true',
+                    help='enables one cycle learning rate') 
+    
+    parser.add_argument('--c_lr_max', default=1e-3, type=float,
+                    help='maximum cycle learning rate')
 
-    parser.add_argument('--lr', default=1e-3, type=float)
+    parser.add_argument('--lr', default=1e-6, type=float)
     parser.add_argument('--lmbda', default=0.1, type=float, help='weight of pde loss')
 
     parser.add_argument('--factor_scheduler', default=0.1, type=float)
