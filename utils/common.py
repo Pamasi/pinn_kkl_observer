@@ -18,7 +18,7 @@ def get_args_parser():
                         type=str, help='directory of checkpoints')
     
     # setup to have a 10ms of sampling time
-    parser.add_argument('--n_init_cond', default=10, type=int,
+    parser.add_argument('--n_init_cond', default=100, type=int,
                         help='number of initialial condition to generated: the higher is, the better') 
     
     parser.add_argument('--n_sample', default=1000, type=int,
