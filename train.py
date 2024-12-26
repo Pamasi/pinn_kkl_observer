@@ -394,12 +394,16 @@ def experiment(args: argparse.Namespace):
             scheduler =  torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=args.c_lr_max,
                                             epochs=args.n_epoch, steps_per_epoch=len(train_loader))
             
+            print('Activated OneCycle Learning Rate')
+            
         else:
             scheduler = ReduceLROnPlateau(optimizer, mode='min',
                                         factor=args.factor_scheduler,
                                         patience=args.patiente_scheduler,
                                         threshold=args.threshold_scheduler,
                                         verbose=True)
+            
+            print('Activated Reduce Learning Rate On Plateau')
             
 
         print('Training is started.', '\n')
