@@ -419,6 +419,7 @@ def experiment(args: argparse.Namespace):
                 model, loss_val, val_loader, device, normalizer, with_pde, pde1_val)
 
             dict_log = {
+                "lr": scheduler.get_last_lr()[0] if args.one_cycle_lr else None,
                 "train/loss/total": loss_train_tot.item(),
                 "train/loss/mse": loss_mse_train.item(),
                 "train/loss/pde": loss_pde_train.item(),
