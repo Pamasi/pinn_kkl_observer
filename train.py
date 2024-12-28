@@ -38,14 +38,15 @@ os.environ["WANDB_START_METHOD"] = "thread"
 
 
 def val_step(model, loss_calc, val_loader, device, normalizer=None,
-             with_pde=False, pde1=None) -> Tuple[torch.Tensor]:
+             with_pde=False, pde=None) -> Tuple[torch.Tensor]:
     """Generate the validation of different episode
     """
     MSE = MSELoss(loss_calc)
 
     loss_tot = 0.0
     loss_mse = 0.0
-    loss_pde = 0.0
+    loss_pde_encoder = 0.0
+    loss_pde_decoder = 0.0
     n_batch = len(val_loader)
 
     model.eval()
@@ -81,12 +82,13 @@ def val_step(model, loss_calc, val_loader, device, normalizer=None,
             # Compute physics loss
             model.mode = 'physics'
             z_hat_ph = model(x_ph)[0]
-            loss_pde1_batch = pde1(x_ph, y_ph, z_hat_ph)
-            # loss_pde2 = pde2(x_ph, z_hat_ph)
+            loss_pde1_batch = pde[0](x_ph, y_ph, z_hat_ph)
+            loss_pde2_batch = pde[1](x_ph, z_hat_ph)
 
-            loss_pde += loss_pde1_batch
+            loss_pde_encoder += loss_pde1_batch
+            loss_pde_decoder += loss_pde2_batch
 
-            loss_batch = loss_normal_batch + loss_pde1_batch  # + loss_pde2
+            loss_batch = loss_normal_batch + loss_pde1_batch   + loss_pde2_batch
 
             loss_tot += loss_batch
 
@@ -95,14 +97,15 @@ def val_step(model, loss_calc, val_loader, device, normalizer=None,
         # mean  batch loss
         loss_tot /= n_batch
         loss_mse /= n_batch
-        loss_pde /= n_batch
+        loss_pde_encoder /= n_batch
+        loss_pde_decoder /= n_batch
 
-    return (loss_tot, loss_mse, loss_pde)
+    return (loss_tot, loss_mse, loss_pde_encoder, loss_pde_decoder)
 
 
 def train_step(model, loss_calc, train_loader, optimizer,
                device,  normalizer=None, with_pde=False, 
-               pde1=None, to_clip=False, clip_norm=0.1, scheduler=None) -> Tuple[torch.Tensor]:
+               pde=None, to_clip=False, clip_norm=0.1, scheduler=None) -> Tuple[torch.Tensor]:
     """
     Training loop.
     """
@@ -110,7 +113,8 @@ def train_step(model, loss_calc, train_loader, optimizer,
 
     loss_tot = 0.0
     loss_mse = 0.0
-    loss_pde = 0.0
+    loss_pde_encoder = 0.0
+    loss_pde_decoder = 0.0
     n_batch = len(train_loader)
 
     model.train()
@@ -145,13 +149,14 @@ def train_step(model, loss_calc, train_loader, optimizer,
         # Compute physics loss
         model.mode = 'physics'
         z_hat_ph = model(x_ph)[0]
-        loss_pde1_batch = pde1(x_ph, y_ph, z_hat_ph)
-        # loss_pde2 = pde2(x_ph, z_hat_ph)
+        loss_pde1_batch = pde[0](x_ph, y_ph, z_hat_ph)
+        loss_pde2_batch = pde[1](x_ph, z_hat_ph)
 
         loss_mse += loss_normal_batch
-        loss_pde += loss_pde1_batch
+        loss_pde_encoder += loss_pde1_batch
+        loss_pde_decoder += loss_pde2_batch
 
-        loss_batch = loss_normal_batch + loss_pde1_batch  # + loss_pde2
+        loss_batch = loss_normal_batch + loss_pde1_batch   + loss_pde2_batch
 
         loss_tot += loss_batch
         loss_batch.backward()
@@ -169,9 +174,10 @@ def train_step(model, loss_calc, train_loader, optimizer,
     # mean  batch loss
     loss_tot /= n_batch
     loss_mse /= n_batch
-    loss_pde /= n_batch
+    loss_pde_encoder /= n_batch
+    loss_pde_decoder /= n_batch
 
-    return loss_tot, loss_mse, loss_pde
+    return (loss_tot, loss_mse, loss_pde_encoder, loss_pde_decoder)
 
 def lr_range_test(model, loss_calc_train, loss_calc_val, train_loader, val_loader, 
                   optimizer, scheduler, device,  normalizer=None, with_pde=False, pde1_train=None, 
@@ -216,10 +222,10 @@ def lr_range_test(model, loss_calc_train, loss_calc_val, train_loader, val_loade
         model.mode = 'physics'
         z_hat_ph = model(x_ph)[0]
         loss_pde1_batch = pde1_train(x_ph, y_ph, z_hat_ph)
-        # loss_pde2 = pde2(x_ph, z_hat_ph)
+        #loss_pde2 = pde1_train[1](x_ph, z_hat_ph)
 
      
-        loss_train_batch = loss_normal_batch + loss_pde1_batch  # + loss_pde2
+        loss_train_batch = loss_normal_batch + loss_pde1_batch   #+ loss_pde2
 
         loss_train_batch.backward()
 
@@ -353,10 +359,15 @@ def experiment(args: argparse.Namespace):
 
     pde1_train = PdeLoss_xz(train_set.M, train_set.K, train_set.system,
                             loss_train, args.lmbda, reduction='mean')
+    
+    pde2_train = PdeLoss_xz(train_set.M, train_set.K, train_set.system,
+                            loss_train, args.lmbda, reduction='mean')
 
-    pde1_val = PdeLoss_xz(val_set.M, val_set.K, val_set.system,
+    pde1_val = PdeLoss_zx(val_set.M, val_set.K, val_set.system,
                           loss_val, args.lmbda, reduction='mean')
+    
 
+    pde_decoder = PdeLoss_zx(loss_val)
     # we analyze only PINN network
     with_pde = True  # False if method == 'supervised_NN' else True
 
@@ -384,7 +395,8 @@ def experiment(args: argparse.Namespace):
         lr_range_test(model, loss_train, loss_val, train_loader, val_loader, 
                         optimizer, scheduler, device,  normalizer, with_pde, pde1_train, 
                         pde1_val, to_clip=args.clip_norm, wandb_run=wandb_run)
-            
+
+
 
 
 
@@ -411,21 +423,23 @@ def experiment(args: argparse.Namespace):
         loss_min = 0.0
 
         for epoch in trange(args.n_epoch):
-            loss_train_tot, loss_mse_train, loss_pde_train = train_step(
+            loss_train_tot, loss_mse_train, loss_pde_encoder_train, loss_pde_decoder_train = train_step(
                 model, loss_train, train_loader, optimizer, device, 
-                normalizer, with_pde, pde1_train, to_clip=args.clip_norm, scheduler = scheduler if args.one_cycle_lr else None)
+                normalizer, with_pde, [pde1_train, pde_decoder], to_clip=args.clip_norm, scheduler = scheduler if args.one_cycle_lr else None)
 
-            (loss_val_tot, loss_mse_val, loss_pde_val) = val_step(
-                model, loss_val, val_loader, device, normalizer, with_pde, pde1_val)
+            (loss_val_tot, loss_mse_val, loss_pde_encoder_val, loss_pde_decoder_val) = val_step(
+                model, loss_val, val_loader, device, normalizer, with_pde, [pde1_val, pde_decoder])
 
             dict_log = {
                 "lr": scheduler.get_last_lr()[0] if args.one_cycle_lr else None,
                 "train/loss/total": loss_train_tot.item(),
                 "train/loss/mse": loss_mse_train.item(),
-                "train/loss/pde": loss_pde_train.item(),
+                "train/loss/pde/encoder": loss_pde_encoder_train.item(),
+                "train/loss/pde/decoder": loss_pde_decoder_train.item(),
                 "val/loss/total": loss_val_tot.item(),
                 "val/loss/mse": loss_mse_val.item(),
-                "val/loss/pde": loss_pde_val.item()
+                "val/loss/pde/encoder": loss_pde_encoder_val.item(),
+                "val/loss/pde/decoder": loss_pde_decoder_val.item()
             }
 
             if args.no_track == False:

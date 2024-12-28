@@ -117,7 +117,7 @@ class PdeLoss_xz(nn.Module):
         self.system = system
         self.loss_calc = loss_calculator
         self.reduction = reduction
-        self.lmbda = lmbda
+        self.lmbda = lmbda  # TODO: remove lambda used it in train and val step
 
     def forward(self, x, y, z_hat):
         loss = self.loss_calc.calc_pde_loss_xz(
