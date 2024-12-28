@@ -86,7 +86,8 @@ def get_args_parser():
                     help='maximum cycle learning rate')
 
     parser.add_argument('--lr', default=1e-6, type=float)
-    parser.add_argument('--lmbda', default=0.1, type=float, help='weight of pde loss')
+    parser.add_argument('--w_enc', default=0.01, type=float, help='weight of encoder loss')
+    parser.add_argument('--w_dec', default=10, type=float, help='weight of decoder loss')
 
     parser.add_argument('--factor_scheduler', default=0.1, type=float)
     parser.add_argument('--threshold_scheduler', default=1e-4, type=float)

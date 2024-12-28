@@ -38,7 +38,7 @@ os.environ["WANDB_START_METHOD"] = "thread"
 
 
 def val_step(model, loss_calc, val_loader, device, normalizer=None,
-             with_pde=False, pde=None) -> Tuple[torch.Tensor]:
+             with_pde=False, pde=None, w_enc=None, w_dec=None ) -> Tuple[torch.Tensor]:
     """Generate the validation of different episode
     """
     MSE = MSELoss(loss_calc)
@@ -88,7 +88,7 @@ def val_step(model, loss_calc, val_loader, device, normalizer=None,
             loss_pde_encoder += loss_pde_enc_batch
             loss_pde_decoder += loss_pde_dec_batch
 
-            loss_batch = loss_normal_batch + loss_pde_enc_batch   + loss_pde_dec_batch
+            loss_batch = loss_normal_batch + w_enc*loss_pde_enc_batch   + w_dec*loss_pde_dec_batch
 
             loss_tot += loss_batch
 
@@ -103,9 +103,8 @@ def val_step(model, loss_calc, val_loader, device, normalizer=None,
     return (loss_tot, loss_mse, loss_pde_encoder, loss_pde_decoder)
 
 
-def train_step(model, loss_calc, train_loader, optimizer,
-               device,  normalizer=None, with_pde=False, 
-               pde=None, to_clip=False, clip_norm=0.1, scheduler=None) -> Tuple[torch.Tensor]:
+def train_step(model, loss_calc, train_loader, optimizer, device,  normalizer=None, with_pde=False, 
+               pde=None, w_enc=None, w_dec=None, to_clip=False, clip_norm=0.1, scheduler=None) -> Tuple[torch.Tensor]:
     """
     Training loop.
     """
@@ -156,7 +155,7 @@ def train_step(model, loss_calc, train_loader, optimizer,
         loss_pde_encoder += loss_pde_enc_batch
         loss_pde_decoder += loss_pde_dec_batch
 
-        loss_batch = loss_normal_batch + loss_pde_enc_batch   + loss_pde_dec_batch
+        loss_batch = loss_normal_batch + w_enc*loss_pde_enc_batch   + w_dec*loss_pde_dec_batch
 
         loss_tot += loss_batch
         loss_batch.backward()
@@ -235,7 +234,7 @@ def lr_range_test(model, loss_calc_train, loss_calc_val, train_loader, val_loade
         optimizer.step()
 
 
-        (loss_tot_val, loss_val_mse, loss_val_pde) = val_step(
+        (loss_tot_val, loss_score_mse, loss_score_pde) = val_step(
             model, loss_calc_val, val_loader, device, normalizer, with_pde, pde1_val)
 
 
@@ -245,8 +244,8 @@ def lr_range_test(model, loss_calc_train, loss_calc_val, train_loader, val_loade
             "train/loss/batch/mse": loss_normal_batch.item(),
             "train/loss/batch/pde": loss_pde1_batch.item(),
             "val/loss/batch/total": loss_tot_val.item(),
-            "val/loss/batch/mse": loss_val_mse.item(),
-            "val/loss/batch/pde": loss_val_pde.item()
+            "val/loss/batch/mse": loss_score_mse.item(),
+            "val/loss/batch/pde": loss_score_pde.item()
         }
 
 
@@ -354,17 +353,15 @@ def experiment(args: argparse.Namespace):
     val_loader = DataLoader(val_set, args.batch, shuffle=True)
 
     model.to(device)
-    loss_train = LossCalculator(loss_fn, model, train_set, device, method)
-    loss_val = LossCalculator(loss_fn, model, val_set, device, method)
+    loss_score = LossCalculator(loss_fn, model, device, method)
 
-    pde_enc_train = PdeLoss_xz(train_set.M, train_set.K, train_set.system,
-                            loss_train, args.lmbda, reduction='mean')
 
-    pde_enc_val = PdeLoss_xz(val_set.M, val_set.K, val_set.system,
-                          loss_val, args.lmbda, reduction='mean')
-    
+    pde_encoder = PdeLoss_xz(train_set.M, train_set.K, train_set.system,
+                            loss_score,  reduction='mean')
 
-    pde_decoder = PdeLoss_zx(loss_val)
+
+
+    pde_decoder = PdeLoss_zx(loss_score)
     # we analyze only PINN network
     with_pde = True  # False if method == 'supervised_NN' else True
 
@@ -389,9 +386,9 @@ def experiment(args: argparse.Namespace):
         print('Performing LR Range Test')
 
      
-        lr_range_test(model, loss_train, loss_val, train_loader, val_loader, 
-                        optimizer, scheduler, device,  normalizer, with_pde, pde_enc_train, 
-                        pde_enc_val, to_clip=args.clip_norm, wandb_run=wandb_run)
+        lr_range_test(model, loss_score, loss_score, train_loader, val_loader, 
+                        optimizer, scheduler, device,  normalizer, with_pde, pde_encoder, 
+                        pde_encoder, to_clip=args.clip_norm, wandb_run=wandb_run)
 
 
 
@@ -421,11 +418,15 @@ def experiment(args: argparse.Namespace):
 
         for epoch in trange(args.n_epoch):
             loss_train_tot, loss_mse_train, loss_pde_encoder_train, loss_pde_decoder_train = train_step(
-                model, loss_train, train_loader, optimizer, device, 
-                normalizer, with_pde, [pde_enc_train, pde_decoder], to_clip=args.clip_norm, scheduler = scheduler if args.one_cycle_lr else None)
+                model, loss_score, train_loader, optimizer, device, 
+                normalizer, with_pde, [pde_encoder, pde_decoder],
+                args.w_enc, args.w_dec,to_clip=args.clip_norm, 
+                scheduler = scheduler if args.one_cycle_lr else None)
 
-            (loss_val_tot, loss_mse_val, loss_pde_encoder_val, loss_pde_decoder_val) = val_step(
-                model, loss_val, val_loader, device, normalizer, with_pde, [pde_enc_val, pde_decoder])
+            (loss_score_tot, loss_mse_val, loss_pde_encoder_val, loss_pde_decoder_val) = val_step(
+                model, loss_score, val_loader, device, normalizer, 
+                with_pde, [pde_encoder, pde_decoder],
+                args.w_enc, args.w_dec)
 
             dict_log = {
                 "lr": scheduler.get_last_lr()[0] if args.one_cycle_lr else None,
@@ -433,7 +434,7 @@ def experiment(args: argparse.Namespace):
                 "train/loss/mse": loss_mse_train.item(),
                 "train/loss/pde/encoder": loss_pde_encoder_train.item(),
                 "train/loss/pde/decoder": loss_pde_decoder_train.item(),
-                "val/loss/total": loss_val_tot.item(),
+                "val/loss/total": loss_score_tot.item(),
                 "val/loss/mse": loss_mse_val.item(),
                 "val/loss/pde/encoder": loss_pde_encoder_val.item(),
                 "val/loss/pde/decoder": loss_pde_decoder_val.item()
