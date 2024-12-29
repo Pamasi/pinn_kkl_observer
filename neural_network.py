@@ -7,9 +7,10 @@ class FCN(nn.Module):
     """
     FullyConnectedNeural Network
     """
-    def __init__(self, num_hidden, hidden_size, in_size, out_size, activation, normalizer=None):
+    def __init__(self, num_hidden, hidden_size, in_size, out_size, activation, normalizer=None, p_drop=0.2):
         super().__init__()
         self.layers = nn.ModuleList()
+        self.dropout = nn.Dropout(p=p_drop)
         self.activation = activation
         self.normalizer = normalizer
         self.mode = 'normal'
@@ -27,10 +28,12 @@ class FCN(nn.Module):
         # Normalize input here
         if self.normalizer != None:
             x = self.normalizer.Normalize(x, self.mode).float()
-
+ 
         for layer in self.layers[:-1]:
             x = self.activation(layer(x))
-        x = self.layers[-1](x)
+
+        
+        x = self.dropout(self.layers[-1](x))
 
         # Denormalize output here
         if self.normalizer != None:
