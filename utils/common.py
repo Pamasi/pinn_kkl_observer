@@ -40,6 +40,9 @@ def get_args_parser():
     parser.add_argument('--noise_var', default=1e-3,
                         type=float, help='variance of the gaussian noise') 
     
+    parser.add_argument('--weight_ridge', default=1e-3,
+                        type=float, help='Ridge Regularizer Weight') 
+    
     parser.add_argument('--max_vel', default=100,
                         type=float, help='maximum velocity of the system')
     
@@ -137,6 +140,7 @@ def load_ckpt(
     scheduler.load_state_dict(['lr'])
 
     torch.set_rng_state(ckpt['torch_state'])
+
 
     epoch = ckpt['epoch']
 

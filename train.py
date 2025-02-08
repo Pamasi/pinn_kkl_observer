@@ -24,7 +24,7 @@ from neural_network import EncoderDecoder
 
 from neural_network import EncoderDecoder
 
-from utils.common import get_args_parser, config_wandb
+from utils.common import get_args_parser, config_wandb, load_ckpt
 from normalizer import Normalizer
 
 
@@ -345,7 +345,8 @@ def experiment(args: argparse.Namespace):
     model = EncoderDecoder(x_size, z_size, args.n_hidden,
                            args.hidden_size, activation, normalizer)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    # L2 regularization
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_ridge)
 
     loss_fn = nn.MSELoss(reduction='mean')
 
@@ -415,8 +416,15 @@ def experiment(args: argparse.Namespace):
         print('Training is started.', '\n')
         
         loss_min = 0.0
+        
+        if args.load_ckpt:
+            offset_epoch = load_ckpt(
+                f'{args.dir}/ckpt_best', model, optimizer, scheduler)
 
-        for epoch in trange(args.n_epoch):
+        else:
+            offset_epoch = 0
+
+        for epoch in trange(offset_epoch, args.n_epoch):
             loss_train_tot, loss_mse_train, loss_pde_encoder_train, loss_pde_decoder_train = train_step(
                 model, loss_score, train_loader, optimizer, device, 
                 normalizer, with_pde, [pde_encoder, pde_decoder],
