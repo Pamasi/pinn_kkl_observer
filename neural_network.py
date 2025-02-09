@@ -7,18 +7,30 @@ class FCN(nn.Module):
     """
     FullyConnectedNeural Network
     """
-    def __init__(self, num_hidden, hidden_size, in_size, out_size, activation, normalizer=None, p_drop=0.2):
+    def __init__(self, num_hidden, hidden_size, in_size, out_size, 
+                 activation, normalizer=None, p_drop=0.2):
         super().__init__()
         self.layers = nn.ModuleList()
         self.dropout = nn.Dropout(p=p_drop)
         self.activation = activation
         self.normalizer = normalizer
-        self.mode = 'normal'
+        self.mode = None
+ 
         current_dim = in_size
         for _ in range(num_hidden):
             self.layers.append(nn.Linear(current_dim, hidden_size))
             current_dim = hidden_size
         self.layers.append(nn.Linear(current_dim, out_size))
+
+
+
+    @property
+    def mode(self):
+        return self.normalizer.mode 
+    
+    @mode.setter
+    def mode(self, value):
+        self.normalizer.mode = value
 
     def forward(self, x):
         """
@@ -26,7 +38,7 @@ class FCN(nn.Module):
         If a normalizer object is passed to the class, the network will normalize the input and denormalize the output.
         """
         # Normalize input here
-        if self.normalizer != None:
+        if self.normalizer is not None:
             x = self.normalizer.Normalize(x, self.mode).float()
  
         for layer in self.layers[:-1]:
@@ -36,7 +48,7 @@ class FCN(nn.Module):
         x = self.dropout(self.layers[-1](x))
 
         # Denormalize output here
-        if self.normalizer != None:
+        if self.normalizer is not None:
             x = self.normalizer.Denormalize(x, self.mode).float()
         return x
 
@@ -52,7 +64,7 @@ class EncoderDecoder(nn.Module):
                            z_size, activation, normalizer)
         self.decoder = FCN(num_hidden, hidden_size, z_size,
                            x_size, activation, normalizer)
-        self.mode = 'normal'
+        self.mode = None
 
     def forward(self, x) -> Tuple[torch.Tensor]:
         self.encoder.mode = self.mode

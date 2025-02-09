@@ -97,7 +97,7 @@ class DataSet(torch.utils.data.Dataset):
             self.ic_normal = self.train_data[4]
             # -----------------------------------------------------------------
 
-            # ----------------------- Physics loss data -----------------------
+            # -------self.mea---------------- Physics loss data -----------------------
             self.train_data_ph = self.generate_data(seed=seed)
             # Total number of samples
             self.data_length_ph = self.train_data_ph[0].shape[0] * \

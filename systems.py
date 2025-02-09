@@ -145,8 +145,8 @@ class TrackingRadar(System):
         self.y_size = n_angular_measure
         self.x_size = n_axis*2
 
-        # choose the latent mapping as done in paper
-        self.z_size = self.y_size*(2*self.x_size + 1)
+        # choose the latent mapping as done in paper: https://minesparis-psl.hal.science/hal-04410807/file/1-s2.0-S2405896323021390-main.pdf
+        self.z_size = 2*self.y_size*(self.x_size + 1)
 
         self.input = None
         self.add_noise = add_noise

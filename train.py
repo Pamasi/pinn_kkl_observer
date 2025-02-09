@@ -1,6 +1,7 @@
 import os
 import argparse
 
+import math
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
@@ -291,7 +292,7 @@ def experiment(args: argparse.Namespace):
     # split traning and validation following literature
     t_init_train = 0
     t_end_train = t_init_train + args.t_sim/2
-
+    # TODO increase trajectory time
     # validation simulation time
     t_init_val = args.t_sim/2
     t_end_val = args.t_sim
@@ -307,7 +308,16 @@ def experiment(args: argparse.Namespace):
         raise ValueError('System  is still not implemented')
 
     # A and B matricies
+
+    # real matrix
     A = np.array(np.diag(-np.arange(1, system.z_size + 1, 1)))
+
+    # using paper https://proceedings.mlr.press/v242/peralez24a/peralez24a.pdf
+    # alpha = 0.5
+    # omega = 0.5
+    # asyn_dynamic = np.asarray([math.cos(omega), -math.sin(omega), math.sin(omega), math.cos(omega)]).reshape(2,2)/(1+np.exp(alpha))
+    # complex conjugate
+    #A = np.block([  [asyn_dynamic, np.zeros((2, 2))], [ np.zeros((2, 2)), asyn_dynamic ]])
 
     B = np.ones([system.z_size, system.y_size])
 
