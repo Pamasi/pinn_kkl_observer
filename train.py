@@ -22,9 +22,6 @@ from utils.dataset import DataSet
 from utils.common import save_ckpt
 from neural_network import EncoderDecoder
 
-
-from neural_network import EncoderDecoder
-
 from utils.common import get_args_parser, config_wandb, load_ckpt
 from normalizer import Normalizer
 
@@ -84,13 +81,17 @@ def val_step(model, loss_calc, val_loader, device, normalizer=None,
             model.mode = 'physics'
             z_hat_ph = model(x_ph)[0]
             loss_pde_enc_batch = pde[0](x_ph, y_ph, z_hat_ph)
-            loss_pde_dec_batch = pde[1](x_ph, z_hat_ph)
 
             loss_pde_encoder += loss_pde_enc_batch
-            loss_pde_decoder += loss_pde_dec_batch
+            loss_batch = loss_normal_batch + w_enc*loss_pde_enc_batch   
 
-            loss_batch = loss_normal_batch + w_enc*loss_pde_enc_batch   + w_dec*loss_pde_dec_batch
+            if w_dec is not None:
+                loss_pde_dec_batch = pde[1](x_ph, z_hat_ph)
+                
+                loss_pde_decoder += loss_pde_dec_batch
+                loss_batch +=  w_dec*loss_pde_dec_batch
 
+  
             loss_tot += loss_batch
 
             # print(pde1.lagrange)
@@ -98,8 +99,11 @@ def val_step(model, loss_calc, val_loader, device, normalizer=None,
         # mean  batch loss
         loss_tot /= n_batch
         loss_mse /= n_batch
+        
         loss_pde_encoder /= n_batch
-        loss_pde_decoder /= n_batch
+
+        if w_dec is not None:
+            loss_pde_decoder /= n_batch
 
     return (loss_tot, loss_mse, loss_pde_encoder, loss_pde_decoder)
 
@@ -150,18 +154,26 @@ def train_step(model, loss_calc, train_loader, optimizer, device,  normalizer=No
         model.mode = 'physics'
         z_hat_ph = model(x_ph)[0]
         loss_pde_enc_batch = pde[0](x_ph, y_ph, z_hat_ph)
-        loss_pde_dec_batch = pde[1](x_ph, z_hat_ph)
+
 
         loss_mse += loss_normal_batch
         loss_pde_encoder += loss_pde_enc_batch
-        loss_pde_decoder += loss_pde_dec_batch
 
-        loss_batch = loss_normal_batch + w_enc*loss_pde_enc_batch   + w_dec*loss_pde_dec_batch
+
+        loss_batch = loss_normal_batch   + w_enc*loss_pde_enc_batch 
+
+        if w_dec is not None:
+            loss_pde_dec_batch = pde[1](x_ph, z_hat_ph)
+
+            loss_pde_decoder += loss_pde_dec_batch
+
+            loss_batch += w_dec*loss_pde_dec_batch
+
 
         loss_tot += loss_batch
         loss_batch.backward()
 
-        # velocity too, gradient is clipped
+        # velocity too  , gradient is clipped
         if to_clip == True:
             torch.nn.utils.clip_grad_norm_(model.parameters(), clip_norm)
         optimizer.step()
@@ -174,7 +186,10 @@ def train_step(model, loss_calc, train_loader, optimizer, device,  normalizer=No
     # mean  batch loss
     loss_tot /= n_batch
     loss_mse /= n_batch
-    loss_pde_encoder /= n_batch
+
+    if w_dec is not None:
+        loss_pde_encoder /= n_batch
+
     loss_pde_decoder /= n_batch
 
     return (loss_tot, loss_mse, loss_pde_encoder, loss_pde_decoder)
@@ -342,7 +357,7 @@ def experiment(args: argparse.Namespace):
         activation = F.relu
 
     else:
-        activation = F.mish
+        raise ValueError('The only Lipschitz function implemented is the ReLU')
 
     device = torch.device(args.device)
 
@@ -371,8 +386,13 @@ def experiment(args: argparse.Namespace):
                             loss_score,  reduction='mean')
 
 
+    if args.enable_pde_dec_loss == True:
+        pde_decoder = PdeLoss_zx(loss_score)
+        print('[WARNING] Decoder PDE Loss is enabled')
 
-    pde_decoder = PdeLoss_zx(loss_score)
+    else:
+        args.w_dec = None
+        pde_decoder = None
     # we analyze only PINN network
     with_pde = True  # False if method == 'supervised_NN' else True
 
@@ -417,8 +437,7 @@ def experiment(args: argparse.Namespace):
             scheduler = ReduceLROnPlateau(optimizer, mode='min',
                                         factor=args.factor_scheduler,
                                         patience=args.patiente_scheduler,
-                                        threshold=args.threshold_scheduler,
-                                        verbose=True)
+                                        threshold=args.threshold_scheduler)
             
             print('Activated Reduce Learning Rate On Plateau')
             
@@ -433,6 +452,10 @@ def experiment(args: argparse.Namespace):
 
         else:
             offset_epoch = 0
+
+
+        # hack to discard decoder loss since not the best as stated in the paper
+   
 
         for epoch in trange(offset_epoch, args.n_epoch):
             loss_train_tot, loss_mse_train, loss_pde_encoder_train, loss_pde_decoder_train = train_step(

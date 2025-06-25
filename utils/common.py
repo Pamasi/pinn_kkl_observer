@@ -59,7 +59,7 @@ def get_args_parser():
     parser.add_argument('--hidden_size', default=50, type=int,
                         help='number of neurons per hidden layer')
     parser.add_argument('--activation_fcn', default='relu', type=str,
-                        choices=['relu', 'mish'],  help='type of activation function')
+                        choices=['relu'],  help='type of activation function')
 
     parser.add_argument('--load_ckpt', action='store_true', help='load checkpoint from \
                         the directory previously created for the current configuration')
@@ -90,7 +90,9 @@ def get_args_parser():
 
     parser.add_argument('--lr', default=1e-6, type=float)
     parser.add_argument('--w_enc', default=0.01, type=float, help='weight of encoder loss')
-    parser.add_argument('--w_dec', default=10, type=float, help='weight of decoder loss')
+    parser.add_argument('--w_dec', default=0, type=float, help='weight of decoder loss')
+    parser.add_argument('--enable_pde_dec_loss', action='store_true',
+                    help='enable the pde loss for decoder: not used in the paper')
 
     parser.add_argument('--factor_scheduler', default=0.1, type=float)
     parser.add_argument('--threshold_scheduler', default=1e-4, type=float)
