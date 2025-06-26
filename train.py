@@ -188,9 +188,9 @@ def train_step(model, loss_calc, train_loader, optimizer, device,  normalizer=No
     loss_mse /= n_batch
 
     if w_dec is not None:
-        loss_pde_encoder /= n_batch
+        loss_pde_decoder /= n_batch
 
-    loss_pde_decoder /= n_batch
+    loss_pde_encoder /= n_batch
 
     return (loss_tot, loss_mse, loss_pde_encoder, loss_pde_decoder)
 
@@ -469,17 +469,31 @@ def experiment(args: argparse.Namespace):
                 with_pde, [pde_encoder, pde_decoder],
                 args.w_enc, args.w_dec)
 
-            dict_log = {
-                "lr": scheduler.get_last_lr()[0] if args.one_cycle_lr else None,
-                "train/loss/total": loss_train_tot.item(),
-                "train/loss/mse": loss_mse_train.item(),
-                "train/loss/pde/encoder": loss_pde_encoder_train.item(),
-                "train/loss/pde/decoder": loss_pde_decoder_train.item(),
-                "val/loss/total": loss_score_tot.item(),
-                "val/loss/mse": loss_mse_val.item(),
-                "val/loss/pde/encoder": loss_pde_encoder_val.item(),
-                "val/loss/pde/decoder": loss_pde_decoder_val.item()
-            }
+
+            if args.enable_pde_dec_loss:
+                dict_log = {
+                    "lr": scheduler.get_last_lr()[0] if args.one_cycle_lr else None,
+                    "train/loss/total": loss_train_tot.item(),
+                    "train/loss/mse": loss_mse_train.item(),
+                    "train/loss/pde/encoder": loss_pde_encoder_train.item(),
+                    "train/loss/pde/decoder": loss_pde_decoder_train.item(),
+                    "val/loss/total": loss_score_tot.item(),
+                    "val/loss/mse": loss_mse_val.item(),
+                    "val/loss/pde/encoder": loss_pde_encoder_val.item(),
+                    "val/loss/pde/decoder": loss_pde_decoder_val.item()
+                }
+
+            else:
+                dict_log = {
+                    "lr": scheduler.get_last_lr()[0] if args.one_cycle_lr else None,
+                    "train/loss/total": loss_train_tot.item(),
+                    "train/loss/mse": loss_mse_train.item(),
+                    "train/loss/pde/encoder": loss_pde_encoder_train.item(),
+                    "val/loss/total": loss_score_tot.item(),
+                    "val/loss/mse": loss_mse_val.item(),
+                    "val/loss/pde/encoder": loss_pde_encoder_val.item(),
+
+                }
 
             if args.no_track == False:
                 wandb.log(dict_log)
