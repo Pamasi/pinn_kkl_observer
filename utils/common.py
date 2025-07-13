@@ -70,8 +70,6 @@ def get_args_parser():
                         type=int, help='number of workers')
     parser.add_argument('--device', default='cuda',
                         type=str, help='device used to train')
-    parser.add_argument('--model_name', default='distilbert-base-uncased',
-                        type=str, help='name of the encoder model')
 
     # hyperparam
     parser.add_argument('--n_epoch', default=100,
@@ -88,7 +86,7 @@ def get_args_parser():
     parser.add_argument('--c_lr_max', default=1e-3, type=float,
                     help='maximum cycle learning rate')
 
-    parser.add_argument('--lr', default=1e-6, type=float)
+    parser.add_argument('--lr', default=1e-3, type=float)
     parser.add_argument('--w_enc', default=0.01, type=float, help='weight of encoder loss')
     parser.add_argument('--w_dec', default=0, type=float, help='weight of decoder loss')
     parser.add_argument('--enable_pde_dec_loss', action='store_true',
