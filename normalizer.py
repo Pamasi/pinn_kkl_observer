@@ -29,6 +29,7 @@ class Normalizer:
         physics or normal dataset. The correct mean and standard deviations are chosen 
         according to those parameters.
         """
+
         if x.size()[1] == self.sys.x_size:     # Check if x or z input
             if mode == 'physics':       # Check if physics or normal data point
                 mean = self.mean_x_ph

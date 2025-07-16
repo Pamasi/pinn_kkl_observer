@@ -24,18 +24,6 @@ class FCN(nn.Module):
 
 
 
-    @property
-    def mode(self):
-        if self.normalize is None:
-            return None
-
-        return self.normalizer.mode 
-    
-    @mode.setter
-    def mode(self, value):
-        if self.normalizer is not None:
-            self.normalizer.mode = value
-
     def forward(self, x):
         """
         Forward method of the FCN.
