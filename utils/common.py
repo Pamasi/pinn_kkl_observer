@@ -17,6 +17,9 @@ def get_args_parser():
     parser.add_argument('--ckpt_dir', default='debug',
                         type=str, help='directory of checkpoints')
     
+
+    parser.add_argument('--weight_path', default='debug',
+                    type=str, help='path of pre-trained weight')
     # setup to have a 10ms of sampling time
     parser.add_argument('--n_init_cond', default=100, type=int,
                         help='number of initialial condition to generated: the higher is, the better') 
