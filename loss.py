@@ -61,7 +61,7 @@ class LossCalculator:
             samples = loss_batch.shape[0]
             loss_pde = torch.sum(loss_batch) / samples
 
-        if reduction == 'sum':
+        elif reduction == 'sum':
             loss_pde = torch.sum(loss_batch)
 
         return loss_pde
@@ -89,7 +89,7 @@ class LossCalculator:
             samples = loss_batch.shape[0]
             loss_pde = torch.sum(loss_batch) / samples
 
-        if reduction == 'sum':
+        elif reduction == 'sum':
             loss_pde = torch.sum(loss_batch)
 
         return loss_pde

@@ -362,6 +362,7 @@ def experiment(args: argparse.Namespace):
     device = torch.device(args.device)
 
     if args.normalize:
+        print('Using normalizer')
         normalizer = Normalizer(train_set, device)
 
     else:
@@ -448,7 +449,9 @@ def experiment(args: argparse.Namespace):
         
         if args.load_ckpt:
             offset_epoch = load_ckpt(
-                f'{args.dir}/ckpt_best', model, optimizer, scheduler)
+                args.weight_path, model, optimizer, scheduler)
+
+            print(f'PRE-TRAINED NETWORK STARTING TRAIN FROM {offset_epoch}')
 
         else:
             offset_epoch = 0
