@@ -140,13 +140,18 @@ class MonoSLAM(System):
 
 
 class TrackingRadar(System):
-    def __init__(self, n_axis=2, n_angular_measure=2, add_noise=False, noise_mean=0, noise_std=0.01):
+    def __init__(self, n_axis=2, n_angular_measure=2, add_noise=False, noise_mean=0, noise_std=0.01, is_complex=False):
         # 2D Motion
         self.y_size = n_angular_measure
         self.x_size = n_axis*2
 
         # choose the latent mapping as done in paper: https://minesparis-psl.hal.science/hal-04410807/file/1-s2.0-S2405896323021390-main.pdf
-        self.z_size = 2*self.y_size*(self.x_size + 1)
+        # change using 
+
+        
+        self.z_size = self.y_size*(self.x_size + 1)
+        if not is_complex:
+            self.z_size *= 2
 
         self.input = None
         self.add_noise = add_noise

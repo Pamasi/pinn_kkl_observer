@@ -89,6 +89,9 @@ def get_args_parser():
     parser.add_argument('--c_lr_max', default=1e-3, type=float,
                     help='maximum cycle learning rate')
 
+    parser.add_argument('--complex_A_matrix',  action='store_true',
+                    help='enable a latent dynamics based on complex conjugate matrix')              
+
     parser.add_argument('--lr', default=1e-3, type=float)
     parser.add_argument('--w_enc', default=0.01, type=float, help='weight of encoder loss')
     parser.add_argument('--w_dec', default=0, type=float, help='weight of decoder loss')
