@@ -36,7 +36,7 @@ os.environ["WANDB_START_METHOD"] = "thread"
 
 
 def val_step(model, loss_calc, val_loader, device, normalizer=None,
-             with_pde=False, pde=None, w_enc=None, w_dec=None ) -> Tuple[torch.Tensor]:
+             with_pde=False, pde=None, w_enc=None, w_dec=None, is_pdel_switchable=False) -> Tuple[torch.Tensor]:
     """Generate the validation of different episode
     """
     MSE = MSELoss(loss_calc)
@@ -49,6 +49,7 @@ def val_step(model, loss_calc, val_loader, device, normalizer=None,
 
     model.eval()
     # to reduce memory footprint
+    switch_pde_state = 0
     with torch.no_grad():
         for (x, z, y, x_ph, y_ph) in val_loader:
 
@@ -83,18 +84,25 @@ def val_step(model, loss_calc, val_loader, device, normalizer=None,
             loss_pde_enc_batch = pde[0](x_ph, y_ph, z_hat_ph)
 
             loss_pde_encoder += loss_pde_enc_batch
-            loss_batch = loss_normal_batch + w_enc*loss_pde_enc_batch   
+            loss_batch = loss_normal_batch    
+
+            if switch_pde_state == 0:
+                loss_batch +=  w_enc*loss_pde_enc_batch 
 
             if w_dec is not None:
                 loss_pde_dec_batch = pde[1](x_ph, z_hat_ph)
-                
                 loss_pde_decoder += loss_pde_dec_batch
-                loss_batch +=  w_dec*loss_pde_dec_batch
+
+                if switch_pde_state == 1 or is_pdel_switchable == False:
+                    loss_batch +=  w_dec*loss_pde_dec_batch
 
   
             loss_tot += loss_batch
 
             # print(pde1.lagrange)
+
+            if is_pdel_switchable == True:
+                switch_pde_state = int(not switch_pde_state)
 
         # mean  batch loss
         loss_tot /= n_batch
@@ -109,7 +117,7 @@ def val_step(model, loss_calc, val_loader, device, normalizer=None,
 
 
 def train_step(model, loss_calc, train_loader, optimizer, device,  normalizer=None, with_pde=False, 
-               pde=None, w_enc=None, w_dec=None, to_clip=False, clip_norm=0.1, scheduler=None) -> Tuple[torch.Tensor]:
+               pde=None, w_enc=None, w_dec=None, to_clip=False, clip_norm=0.1, scheduler=None, is_pdel_switchable=False) -> Tuple[torch.Tensor]:
     """
     Training loop.
     """
@@ -122,6 +130,8 @@ def train_step(model, loss_calc, train_loader, optimizer, device,  normalizer=No
     n_batch = len(train_loader)
 
     model.train()
+
+    switch_pde_state = 0
     for data in train_loader:
         # Normal and physics data
         x, z, y, x_ph, y_ph = data
@@ -152,22 +162,31 @@ def train_step(model, loss_calc, train_loader, optimizer, device,  normalizer=No
 
         # Compute physics loss
         model.mode = 'physics'
+
         z_hat_ph = model(x_ph)[0]
+
+       
         loss_pde_enc_batch = pde[0](x_ph, y_ph, z_hat_ph)
+
+
 
 
         loss_mse += loss_normal_batch
         loss_pde_encoder += loss_pde_enc_batch
 
 
-        loss_batch = loss_normal_batch   + w_enc*loss_pde_enc_batch 
+        loss_batch = loss_normal_batch 
+
+        if switch_pde_state == 0:
+            loss_batch += w_enc*loss_pde_enc_batch
+ 
 
         if w_dec is not None:
             loss_pde_dec_batch = pde[1](x_ph, z_hat_ph)
-
             loss_pde_decoder += loss_pde_dec_batch
 
-            loss_batch += w_dec*loss_pde_dec_batch
+            if switch_pde_state == 1 or is_pdel_switchable == False:
+                loss_batch += w_dec*loss_pde_dec_batch
 
 
         loss_tot += loss_batch
@@ -182,6 +201,9 @@ def train_step(model, loss_calc, train_loader, optimizer, device,  normalizer=No
         if scheduler is not None:
             scheduler.step()
         # print(pde1.lagrange)
+
+        if is_pdel_switchable == True:
+            switch_pde_state = int(not switch_pde_state)
 
     # mean  batch loss
     loss_tot /= n_batch
@@ -407,8 +429,9 @@ def experiment(args: argparse.Namespace):
 
     if args.enable_pde_dec_loss == True:
         pde_decoder = PdeLoss_zx(loss_score)
-        print('[WARNING] Decoder PDE Loss is enabled: one loss should be at time')
+        print('[WARNING] Decoder PDE Loss is enabled: one PDE loss should be used  per time')
 
+    
     else:
         args.w_dec = None
         pde_decoder = None
@@ -416,6 +439,8 @@ def experiment(args: argparse.Namespace):
     with_pde = True  # False if method == 'supervised_NN' else True
 
     print('Device:', device)
+
+    is_pdel_switchable = True if args.is_pdel_switchable else False
 
 
 
@@ -435,6 +460,7 @@ def experiment(args: argparse.Namespace):
         
         print('Performing LR Range Test')
 
+        assert is_pdel_switchable == False, 'not implemented switch between Encoder and Decoder Loss for LR Range Test'
      
         lr_range_test(model, loss_score, loss_score, train_loader, val_loader, 
                         optimizer, scheduler, device,  normalizer, with_pde, pde_encoder, 
@@ -483,12 +509,13 @@ def experiment(args: argparse.Namespace):
                 model, loss_score, train_loader, optimizer, device, 
                 normalizer, with_pde, [pde_encoder, pde_decoder],
                 args.w_enc, args.w_dec,to_clip=args.clip_norm, 
-                scheduler = scheduler if args.one_cycle_lr else None)
+                scheduler = scheduler if args.one_cycle_lr else None,
+                is_pdel_switchable=is_pdel_switchable)
 
             (loss_score_tot, loss_mse_val, loss_pde_encoder_val, loss_pde_decoder_val) = val_step(
                 model, loss_score, val_loader, device, normalizer, 
                 with_pde, [pde_encoder, pde_decoder],
-                args.w_enc, args.w_dec)
+                args.w_enc, args.w_dec, is_pdel_switchable=is_pdel_switchable)
 
 
             if args.enable_pde_dec_loss:

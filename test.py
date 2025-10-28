@@ -225,7 +225,7 @@ def experiment(args: argparse.Namespace):
 
     if args.enable_pde_dec_loss == True:
         pde_decoder = PdeLoss_zx(loss_score)
-        print('[WARNING] Decoder PDE Loss is enabled')
+        print('[WARNING] Decoder PDE Loss is enabled: one PDE loss should be used  per time')
 
     else:
         args.w_dec = None

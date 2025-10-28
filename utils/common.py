@@ -98,6 +98,8 @@ def get_args_parser():
     parser.add_argument('--enable_pde_dec_loss', action='store_true',
                     help='enable the pde loss for decoder: not used in the paper')
 
+    parser.add_argument('--is_pdel_switchable', action='store_true',
+                    help='enable switch between pde loss for encoder and decoder')
     parser.add_argument('--factor_scheduler', default=0.1, type=float)
     parser.add_argument('--threshold_scheduler', default=1e-4, type=float)
     parser.add_argument('--patiente_scheduler', default=1, type=float)
