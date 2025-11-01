@@ -371,10 +371,13 @@ def experiment(args: argparse.Namespace):
         # B[0, 1] = 1
 
     else:
-        n_vel = 1
+        n_vel = args.gain_eigval
+        print(f'Gain of the eigenvalues of A matrix is {n_vel}')
+
         A = np.array(np.diag(-n_vel*np.arange(1, system.z_size + 1, 1)))
 
         B = np.ones([system.z_size, system.y_size])
+        
     print('Matrices generated')
     # use split based on trajector (2-step episod)
     train_set = DataSet(system, A, B, t_init_train, t_end_train,
