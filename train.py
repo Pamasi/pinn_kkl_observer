@@ -64,7 +64,7 @@ def val_step(model, loss_calc, val_loader, device, normalizer=None,
 
             model.mode = 'normal'
 
-            z_hat, x_hat, norm_z_hat, norm_x_hat = model(x)
+            _, _, norm_z_hat, norm_x_hat = model(x)
             if normalizer != None:
                 label_x = normalizer.Normalize(
                     x, mode='normal').float()
@@ -82,6 +82,9 @@ def val_step(model, loss_calc, val_loader, device, normalizer=None,
             model.mode = 'physics'
             z_hat_ph = model(x_ph)[0]
             loss_pde_enc_batch = pde[0](x_ph, y_ph, z_hat_ph)
+
+            assert loss_pde_enc_batch != float('inf'), 'pde loss cannot be inf'
+            assert loss_pde_enc_batch != float('inf'), 'pde loss cannot be -inf'
 
             loss_pde_encoder += loss_pde_enc_batch
             loss_batch = loss_normal_batch    
@@ -147,7 +150,7 @@ def train_step(model, loss_calc, train_loader, optimizer, device,  normalizer=No
         optimizer.zero_grad()
         model.mode = 'normal'
 
-        z_hat, x_hat, norm_z_hat, norm_x_hat = model(x)
+        _, _, norm_z_hat, norm_x_hat = model(x)
         if normalizer != None:
             label_x = normalizer.Normalize(
                 x, mode='normal').float()
@@ -169,7 +172,8 @@ def train_step(model, loss_calc, train_loader, optimizer, device,  normalizer=No
         loss_pde_enc_batch = pde[0](x_ph, y_ph, z_hat_ph)
 
 
-
+        assert loss_pde_enc_batch != float('inf'), 'pde loss cannot be inf'
+        assert loss_pde_enc_batch != float('inf'), 'pde loss cannot be -inf'
 
         loss_mse += loss_normal_batch
         loss_pde_encoder += loss_pde_enc_batch
@@ -242,7 +246,7 @@ def lr_range_test(model, loss_calc_train, loss_calc_val, train_loader, val_loade
         optimizer.zero_grad()
         model.mode = 'normal'
 
-        z_hat, x_hat, norm_z_hat, norm_x_hat = model(x)
+        _, _, norm_z_hat, norm_x_hat = model(x)
         if normalizer != None:
             label_x = normalizer.Normalize(
                 x, mode='normal').float()
