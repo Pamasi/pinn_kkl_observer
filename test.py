@@ -192,6 +192,8 @@ def experiment(args: argparse.Namespace):
     if str(args.activation_fcn) == 'relu':
         activation = F.relu
 
+    elif str(args.activation_fcn) == 'tanh':
+        activation = F.tanh
     else:
         raise ValueError('The only Lipschitz function implemented is the ReLU')
 
