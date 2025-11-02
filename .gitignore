@@ -1,0 +1,12 @@
+.pyc
+.vscode
+__pycache__
+*.pdf
+weight/*
+*.zip
+*.mat
+*.png
+*train_wandb_*
+wandb/*
+ckpt*
+*env

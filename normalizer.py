@@ -1,7 +1,11 @@
 import torch
 
+
 class Normalizer:
-    def __init__(self, dataset):
+    """
+    Normalize do avoid numerical issue between different state scalings
+    """
+    def __init__(self, dataset, device):
         self.x_size = dataset.system.x_size
         self.z_size = dataset.system.z_size
 
@@ -17,20 +21,23 @@ class Normalizer:
 
         self.sys = dataset.system
 
-    def check_sys(self, tensor, mode):
+        self.device = device
+
+    def check_sys(self, x, mode):
         """
-        Checks if the tensor is x or z data. Then if the tensor belongs to the 
+        Checks if the x is x or z data. Then if the x belongs to the 
         physics or normal dataset. The correct mean and standard deviations are chosen 
         according to those parameters.
         """
-        if tensor.size()[1] == self.sys.x_size:     # Check if x or z input
+
+        if x.size()[1] == self.sys.x_size:     # Check if x or z input
             if mode == 'physics':       # Check if physics or normal data point
                 mean = self.mean_x_ph
                 std = self.std_x
             else:
                 mean = self.mean_x
                 std = self.std_x
-        elif tensor.size()[1] == self.sys.z_size:
+        elif x.size()[1] == self.sys.z_size:
             if mode == 'physics':
                 mean = self.mean_z_ph
                 std = self.std_z_ph
@@ -38,14 +45,17 @@ class Normalizer:
                 mean = self.mean_z
                 std = self.std_z
         else:
-            raise Exception('Size of tensor unmatched with any system.')     
+            raise Exception('Size of x unmatched with any system.')
 
-        return mean, std
+        return mean.to(self.device), std.to(self.device)
 
-    def Normalize(self, tensor, mode):
-        mean, std = self.check_sys(tensor, mode)            
-        return (tensor - mean) / std
+    def Normalize(self, x, mode):
+        mean, std = self.check_sys(x, mode)
 
-    def Denormalize(self, tensor, mode):
-        mean, std = self.check_sys(tensor, mode)           
-        return tensor*std + mean        
+        # move to same sensor
+        normalized_x = (x.to(self.device) - mean.to(self.device)) / std
+        return normalized_x
+
+    def Denormalize(self, x, mode):
+        mean, std = self.check_sys(x, mode)
+        return x*std + mean

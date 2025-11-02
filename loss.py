@@ -1,0 +1,145 @@
+import torch
+from torch.autograd.functional import jacobian
+import numpy as np
+from torch import nn
+
+
+class LossCalculator:
+    def __init__(self, loss_fn, net, device, method):
+        self.loss_fn = loss_fn
+        self.net = net
+        self.device = device
+        self.method = method
+
+    # Normal loss calculation
+    def calc_loss(self, x_hat, z_hat, x, z):
+        loss_xz = self.loss_fn(z_hat, z)
+        loss_zx = self.loss_fn(x_hat, x)
+
+        if self.method == 'unsupervised_AE':
+            loss = loss_zx
+        else:
+            loss = loss_xz + loss_zx
+
+        return loss
+
+    # # PDE constrain loss for PINN from x --> z
+    def calc_pde_loss_xz(self, x, y, z_hat, system, M, K, reduction='mean'):
+        M = torch.from_numpy(M).to(self.device)
+        K = torch.from_numpy(K).to(self.device)
+
+        # Jacobian
+        dTdx = self.calc_J(x, 'encoder')
+
+        # Computation of f(x)
+        u = 0
+
+        f = [system.function(u, state.detach().cpu().numpy()) for state in x]
+        f = torch.from_numpy(np.array(f)).float().to(self.device)
+        # dT/dx * f(x)
+        dTdx_mul_f = torch.bmm(dTdx, torch.unsqueeze(f, 2))
+
+        z_hat = torch.unsqueeze(z_hat, 2)
+        M = M.to(torch.float32)
+        M_mul_T = torch.matmul(M, z_hat)    # MT(x)
+
+        # Check if y elements are scalar
+        K = K.to(torch.float32)
+        y = y.to(torch.float32)
+        if y[0].shape == torch.Size([]):
+            K_mul_h = torch.matmul(K, y.view(y.shape[0], 1, 1))    # Kh(x)
+        else:
+            y = torch.unsqueeze(y, 2)
+            K_mul_h = torch.matmul(K, y)    # Kh(x)
+
+        # dT/dx*f(x) - MT(x) - Kh(x) = 0
+        pde = dTdx_mul_f - M_mul_T - K_mul_h
+        loss_batch = torch.linalg.norm(pde, dim=1)    # Element-wise norm
+
+        # Type of loss reduction
+        if reduction == 'mean':
+            samples = loss_batch.shape[0]
+            loss_pde = torch.sum(loss_batch) / samples
+
+        elif reduction == 'sum':
+            loss_pde = torch.sum(loss_batch)
+
+        return loss_pde
+
+    # PDE constrain loss for PINN from z --> x
+    def calc_pde_loss_zx(self, x, z_hat, reduction='mean'):
+        # Jacobian output of NN1 w.r.t input of NN1
+        dTdx = self.calc_J(x, 'encoder')
+
+        # Jacobian output of NN2 w.r.t input of NN2
+        dTheta_dT = self.calc_J(z_hat, 'decoder')
+
+        dTheta_dT_mul_dTdx = torch.bmm(dTheta_dT, dTdx)
+
+        # dTheta/dT * dT/dx - I = 0
+        pde = dTheta_dT_mul_dTdx - \
+            torch.eye(dTheta_dT_mul_dTdx.shape[1], dTheta_dT_mul_dTdx.shape[2]).to(
+                self.device)
+
+        loss_batch = torch.linalg.matrix_norm(
+            pde)    # Element-wise matrix norm
+
+        # Type of loss reduction
+        if reduction == 'mean':
+            samples = loss_batch.shape[0]
+            loss_pde = torch.sum(loss_batch) / samples
+
+        elif reduction == 'sum':
+            loss_pde = torch.sum(loss_batch)
+
+        return loss_pde
+
+    # Jacobian calculation
+    def calc_J(self, x, FCN):
+        m = x.shape[0]
+        if FCN == 'encoder':
+            net = self.net.encoder
+        if FCN == 'decoder':
+            net = self.net.decoder
+        dTdx = jacobian(net, x, create_graph=False)    # dT/dx
+        # result is m* d_o * m * d_i
+        ind = torch.arange(0, m)
+
+        return dTdx[ind, :, ind, :]
+
+
+class PdeLoss_xz(nn.Module):
+    def __init__(self, M, K, system, loss_calculator, reduction='mean'):
+        super(PdeLoss_xz, self).__init__()
+        self.M = M
+        self.K = K
+        self.system = system
+        self.loss_calc = loss_calculator
+        self.reduction = reduction
+
+    def forward(self, x, y, z_hat):
+        loss = self.loss_calc.calc_pde_loss_xz(
+            x, y, z_hat, self.system, self.M, self.K, self.reduction)
+        return loss
+
+
+class PdeLoss_zx(nn.Module):
+    def __init__(self, loss_calculator, reduction='mean'):
+        super(PdeLoss_zx, self).__init__()
+        self.loss_calc = loss_calculator
+        self.reduction = reduction
+
+    def forward(self, x, z_hat):
+        loss = self.loss_calc.calc_pde_loss_zx(x, z_hat, self.reduction)
+        return loss
+
+
+class MSELoss(nn.Module):
+    def __init__(self, loss_calculator):
+        super(MSELoss, self).__init__()
+        self.loss_calc = loss_calculator
+
+
+    def forward(self, x_hat, z_hat, x, z):
+        loss = self.loss_calc.calc_loss(x_hat, z_hat, x, z)
+        return loss
