@@ -66,9 +66,9 @@ def val_step(model, loss_calc, val_loader, device, normalizer=None,
             z_hat, x_hat, norm_z_hat, norm_x_hat = model(x)
             if normalizer != None:
                 label_x = normalizer.Normalize(
-                    x, mode='normal').float()
+                    x, mode='normal')
                 label_z = normalizer.Normalize(
-                    z, mode='normal').float()
+                    z, mode='normal')
             else:
                 label_x = x
                 label_z = z
@@ -194,6 +194,9 @@ def experiment(args: argparse.Namespace):
 
     elif str(args.activation_fcn) == 'tanh':
         activation = F.tanh
+
+    elif str(args.activation_fcn) == 'sigmoid':
+        activation = F.sigmoid
     else:
         raise ValueError('The only Lipschitz function implemented is the ReLU')
 

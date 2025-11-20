@@ -85,7 +85,7 @@ class Observer:
 
         for idx, output in enumerate(y):
             with torch.no_grad():
-                x_hat = self.T_inv(torch.tensor(z[-1]).float())
+                x_hat = self.T_inv(torch.tensor(z[-1]))
             u_sub_u0 = u(t[idx]) - u0(t[idx])
             dTdx = jacobian(self.T, x_hat).cpu().numpy()
             dTdx_mul_g = np.matmul(dTdx, g)
@@ -103,7 +103,7 @@ class Observer:
             z.append(np.ndarray.tolist(a))
 
         z = np.array(z)
-        z = torch.from_numpy(z).float().to(self.device)
+        z = torch.from_numpy(z).to(self.device)
         with torch.no_grad():
             x_hat = self.T_inv(z)
 
@@ -140,7 +140,7 @@ class Observer:
         z = data.KKL_observer_data(
             self.z_system.M, self.z_system.K, y, self.a, self.b, ic_z, self.N)
         z = torch.from_numpy(z).view(
-            self.N+1, self.system.z_size).float().to(self.device)
+            self.N+1, self.system.z_size).to(self.device)
 
         with torch.no_grad():
             x_hat = self.T_inv(z)

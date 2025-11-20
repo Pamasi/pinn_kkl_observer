@@ -35,17 +35,17 @@ class LossCalculator:
         u = 0
 
         f = [system.function(u, state.detach().cpu().numpy()) for state in x]
-        f = torch.from_numpy(np.array(f)).float().to(self.device)
+        f = torch.from_numpy(np.array(f)).to(self.device)
         # dT/dx * f(x)
         dTdx_mul_f = torch.bmm(dTdx, torch.unsqueeze(f, 2))
 
         z_hat = torch.unsqueeze(z_hat, 2)
-        M = M.to(torch.float32)
+        M = M.to()
         M_mul_T = torch.matmul(M, z_hat)    # MT(x)
 
         # Check if y elements are scalar
-        K = K.to(torch.float32)
-        y = y.to(torch.float32)
+        K = K.to()
+        y = y.to()
         if y[0].shape == torch.Size([]):
             K_mul_h = torch.matmul(K, y.view(y.shape[0], 1, 1))    # Kh(x)
         else:

@@ -62,7 +62,7 @@ def get_args_parser():
     parser.add_argument('--hidden_size', default=50, type=int,
                         help='number of neurons per hidden layer')
     parser.add_argument('--activation_fcn', default='relu', type=str,
-                        choices=['relu'],  help='type of activation function')
+                        choices=['relu', 'tanh', 'sigmoid'],  help='type of activation function')
 
     parser.add_argument('--load_ckpt', action='store_true', help='load checkpoint from \
                         the directory previously created for the current configuration')
@@ -104,6 +104,10 @@ def get_args_parser():
     parser.add_argument('--factor_scheduler', default=0.1, type=float)
     parser.add_argument('--threshold_scheduler', default=1e-4, type=float)
     parser.add_argument('--patiente_scheduler', default=1, type=float)
+
+    parser.add_argument('--use_curriculum', action='store_true',
+                        help='use curriculum learning')
+
     # technicality
     parser.add_argument('--seed', default=888, type=int, help='seed')
     parser.add_argument('--no_track', action='store_true',

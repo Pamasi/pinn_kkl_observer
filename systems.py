@@ -164,14 +164,14 @@ class TrackingRadar(System):
     def function(self, u, x):
         # reference: https://webee.technion.ac.il/people/shimkin/Estimation09/ch8_target.pdf
         # x-axis
-        x1 = x[0]
+        #x1 = x[0]
         x2 = x[1]
 
         x1_dot = x2
         x2_dot = 0
 
         # y-axis
-        x3 = x[2]
+        #x3 = x[2]
         x4 = x[3]
 
         x3_dot = x4
