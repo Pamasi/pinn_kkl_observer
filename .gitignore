@@ -10,3 +10,4 @@ weight/*
 wandb/*
 ckpt*
 *env
+wandb_*
