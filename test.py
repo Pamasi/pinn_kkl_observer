@@ -151,7 +151,7 @@ def experiment(args: argparse.Namespace):
         print(f'Noise mean:({args.noise_mean})\tvariance:({args.noise_var})')
 
     if str(args.system).endswith('radar'):
-        system = systems.TrackingRadar(
+        system = systems.NLOSRadar(
             add_noise=args.add_noise, noise_mean=args.noise_mean, noise_std=math.sqrt(args.noise_var))
 
     else:

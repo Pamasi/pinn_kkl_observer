@@ -139,7 +139,7 @@ class MonoSLAM(System):
             pass
 
 
-class TrackingRadar(System):
+class NLOSRadar(System):
     def __init__(self, n_axis=2, n_angular_measure=2, add_noise=False, noise_mean=0, noise_std=0.01, is_complex=False):
         # 2D Motion
         self.y_size = n_angular_measure
@@ -188,6 +188,63 @@ class TrackingRadar(System):
         range = sqrt(x[2]**2 +  x[0]**2)
 
         y = [azimuth, range]
+
+        if self.add_noise:
+            self.noise = self.gen_noise(self.noise_mean, self.noise_std)[1]
+            y += self.noise
+
+        return y
+
+
+class NLOSDopplerRadar(System):
+    def __init__(self, n_axis=2, n_angular_measure=3, add_noise=False, noise_mean=0, noise_std=0.01, is_complex=False):
+        # 2D Motion
+        self.y_size = n_angular_measure
+        self.x_size = n_axis*2
+
+        # choose the latent mapping as done in paper: https://minesparis-psl.hal.science/hal-04410807/file/1-s2.0-S2405896323021390-main.pdf
+        # change using 
+
+        
+        self.z_size = self.y_size*(self.x_size + 1)
+        if not is_complex:
+            self.z_size *= 2
+
+        self.input = None
+        self.add_noise = add_noise
+
+        self.noise = 0
+        self.noise_mean = noise_mean
+        self.noise_std = noise_std
+        super().__init__(self.function, self.output)
+
+    def function(self, u, x):
+        # reference: https://webee.technion.ac.il/people/shimkin/Estimation09/ch8_target.pdf
+        # x-axis
+        #x1 = x[0]
+        x2 = x[1]
+
+        x1_dot = x2
+        x2_dot = 0
+
+        # y-axis
+        #x3 = x[2]
+        x4 = x[3]
+
+        x3_dot = x4
+        x4_dot = 0
+
+        if self.add_noise:
+            self.noise = self.gen_noise(self.noise_mean, self.noise_std)[0]
+
+        return np.array([x1_dot, x2_dot, x3_dot, x4_dot]) + self.noise
+
+    def output(self, x):
+
+        azimuth = atan2(x[2], x[0])
+        range = sqrt(x[2]**2 +  x[0]**2)
+        range_rate = (x[0]*x[1] +x[2]*x[3])/range
+        y = [azimuth, range, range_rate]
 
         if self.add_noise:
             self.noise = self.gen_noise(self.noise_mean, self.noise_std)[1]

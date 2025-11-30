@@ -352,8 +352,13 @@ def experiment(args: argparse.Namespace):
     if args.add_noise:
         print(f'Noise mean:({args.noise_mean})\tvariance:({args.noise_var})')
 
-    if str(args.system).endswith('radar'):
-        system = systems.TrackingRadar(
+
+    if str(args.system).startswith('doppler'):
+        system = systems.NLOSDopplerRadar(
+            add_noise=args.add_noise, noise_mean=args.noise_mean, noise_std=math.sqrt(args.noise_var))
+
+    elif str(args.system).endswith('radar'):
+        system = systems.NLOSRadar(
             add_noise=args.add_noise, noise_mean=args.noise_mean, noise_std=math.sqrt(args.noise_var))
 
     else:

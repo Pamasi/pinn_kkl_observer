@@ -31,7 +31,7 @@ def get_args_parser():
     parser.add_argument('--t_sim', default=10, type=int,
                         help='time of the simulation (second)')
 
-    systems = ['radar', 'monoslam']
+    systems = ['radar', 'doppler_radar']
     parser.add_argument('--system', default='radar', choices=systems)
     parser.add_argument('--normalize', action='store_true',
                         help='normalize data')
