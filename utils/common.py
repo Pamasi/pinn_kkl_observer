@@ -170,7 +170,11 @@ def get_ckpt_dir(epoch: int, dir: str = '') -> str:
 def config_wandb(args: argparse.Namespace) -> Tuple[wandb.wandb_run.Run, str]:
     print(sys.executable)
     wandb.login()
+    
     wandb_run_name = f'PINN_{args.system}_NH{args.n_hidden}_HS{args.hidden_size}_AF{str(args.activation_fcn).upper()}_LR{args.lr}'
+
+    if args.add_noise == True:
+        wandb_run_name = f'{wandb_run_name}_NMEAN_{args.noise_mean}_NVAR_{args.noise_var}'
 
     wandb_tag = [f'{param}@{val}' for param, val in vars(args).items()]
 
