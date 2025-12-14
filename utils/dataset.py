@@ -215,11 +215,11 @@ class DataSet(torch.utils.data.Dataset):
                             self.mean_output) / self.std_output
 
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor]:
-        x = self.x_data[idx].float()
-        z = self.z_data[idx].float()
-        y = self.output_data[idx].float()
-        x_ph = self.x_data_ph[idx].float()
-        y_ph = self.output_data_ph[idx].float()
+        x = self.x_data[idx]
+        z = self.z_data[idx]
+        y = self.output_data[idx]
+        x_ph = self.x_data_ph[idx]
+        y_ph = self.output_data_ph[idx]
 
         assert torch.sum(torch.isinf(z == True)
                          ) == 0, 'z data must be finite'

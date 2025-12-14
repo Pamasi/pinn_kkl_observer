@@ -26,7 +26,10 @@ from utils.common import get_args_parser, config_wandb, load_ckpt
 from normalizer import Normalizer
 
 
-torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cuda.matmul.allow_tf32 = False
+# following https://arxiv.org/html/2505.10949v1#S1.F1
+torch.set_default_dtype(torch.float64)
+
 torch.backends.cudnn.allow_tf32 = True
 # to enable reproducibility
 torch.backends.cudnn.benchmark = False
@@ -67,9 +70,9 @@ def val_step(model, loss_calc, val_loader, device, normalizer=None,
             _, _, norm_z_hat, norm_x_hat = model(x)
             if normalizer != None:
                 label_x = normalizer.Normalize(
-                    x, mode='normal').float()
+                    x, mode='normal')
                 label_z = normalizer.Normalize(
-                    z, mode='normal').float()
+                    z, mode='normal')
             else:
                 label_x = x
                 label_z = z
@@ -153,9 +156,9 @@ def train_step(model, loss_calc, train_loader, optimizer, device,  normalizer=No
         _, _, norm_z_hat, norm_x_hat = model(x)
         if normalizer != None:
             label_x = normalizer.Normalize(
-                x, mode='normal').float()
+                x, mode='normal')
             label_z = normalizer.Normalize(
-                z, mode='normal').float()
+                z, mode='normal')
         else:
             label_x = x
             label_z = z
@@ -249,9 +252,9 @@ def lr_range_test(model, loss_calc_train, loss_calc_val, train_loader, val_loade
         _, _, norm_z_hat, norm_x_hat = model(x)
         if normalizer != None:
             label_x = normalizer.Normalize(
-                x, mode='normal').float()
+                x, mode='normal')
             label_z = normalizer.Normalize(
-                z, mode='normal').float()
+                z, mode='normal')
         else:
             label_x = x
             label_z = z
@@ -315,11 +318,19 @@ def experiment(args: argparse.Namespace):
     print('Generating Data.', '\n')
     # set of initial condition among which the LHS is performed
     # assumed to account also for racing drone
-    pos_limit = [-args.max_pos, args.max_pos]
-    vel_limit = [-args.max_vel, args.max_vel]
+    pos_train_limit = [0, args.max_pos/2]
+    vel_train_limit = [0, args.max_vel]
+
+
+    pos_val_limit = [args.max_pos/2, args.max_pos]
+    vel_val_limit = [0, args.max_vel]
 
     # state space domain
-    limits = np.array([pos_limit, vel_limit, pos_limit, vel_limit])    
+    train_limits = np.array([pos_train_limit, vel_train_limit, pos_train_limit, vel_train_limit])   
+    val_limits = np.array([pos_val_limit, vel_val_limit, pos_val_limit, vel_val_limit])   
+
+    
+    
 
     # parameter for LHS
 
@@ -341,8 +352,13 @@ def experiment(args: argparse.Namespace):
     if args.add_noise:
         print(f'Noise mean:({args.noise_mean})\tvariance:({args.noise_var})')
 
-    if str(args.system).endswith('radar'):
-        system = systems.TrackingRadar(
+
+    if str(args.system).startswith('doppler'):
+        system = systems.NLOSDopplerRadar(
+            add_noise=args.add_noise, noise_mean=args.noise_mean, noise_std=math.sqrt(args.noise_var))
+
+    elif str(args.system).endswith('radar'):
+        system = systems.NLOSRadar(
             add_noise=args.add_noise, noise_mean=args.noise_mean, noise_std=math.sqrt(args.noise_var))
 
     else:
@@ -356,7 +372,7 @@ def experiment(args: argparse.Namespace):
         omega = 1
 
 
-        A = np.zeros((system.z_size, system.z_size), dtype=float)
+        A = np.zeros((system.z_size, system.z_size))
                         
        
 
@@ -385,10 +401,10 @@ def experiment(args: argparse.Namespace):
     print('Matrices generated')
     # use split based on trajector (2-step episod)
     train_set = DataSet(system, A, B, t_init_train, t_end_train,
-                        n_sample, n_init_cond, limits, seed=args.seed, data_gen_mode='backward sim')
+                        n_sample, n_init_cond, train_limits, seed=args.seed, data_gen_mode='backward sim')
 
     val_set = DataSet(system, A, B, t_init_val, t_end_val,
-                      n_sample, n_init_cond, limits, seed=args.seed, data_gen_mode='backward sim')
+                      n_sample, n_init_cond, val_limits, seed=args.seed, data_gen_mode='backward sim')
 
     print('Dataset sucessfully generated.', '\n')
 
@@ -405,8 +421,11 @@ def experiment(args: argparse.Namespace):
         
     elif str(args.activation_fcn) == 'tanh':
         activation = F.tanh
+            
+    elif str(args.activation_fcn) == 'sigmoid':
+        activation = F.sigmoid
     else:
-        raise ValueError('The only Lipschitz function implemented is the ReLU')
+        raise ValueError('The only Lipschitz function implemented are ReLU, Tanh and Sigmoid')
 
     device = torch.device(args.device)
 
@@ -569,6 +588,13 @@ def experiment(args: argparse.Namespace):
                 save_ckpt(model, epoch, loss_mse_val, optimizer,
                         scheduler, args.ckpt_dir, torch.get_rng_state())
 
+
+            # curriculum learning
+            if args.use_curriculum and ((epoch+1)%10) == 0:
+                args.w_enc *= 10
+
+
+                
             if (epoch > 0 and loss_mse_val < loss_min) or (epoch == 0):
                 loss_min = loss_mse_val
 

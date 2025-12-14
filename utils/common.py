@@ -31,7 +31,7 @@ def get_args_parser():
     parser.add_argument('--t_sim', default=10, type=int,
                         help='time of the simulation (second)')
 
-    systems = ['radar', 'monoslam']
+    systems = ['radar', 'doppler_radar']
     parser.add_argument('--system', default='radar', choices=systems)
     parser.add_argument('--normalize', action='store_true',
                         help='normalize data')
@@ -62,7 +62,7 @@ def get_args_parser():
     parser.add_argument('--hidden_size', default=50, type=int,
                         help='number of neurons per hidden layer')
     parser.add_argument('--activation_fcn', default='relu', type=str,
-                        choices=['relu'],  help='type of activation function')
+                        choices=['relu', 'tanh', 'sigmoid'],  help='type of activation function')
 
     parser.add_argument('--load_ckpt', action='store_true', help='load checkpoint from \
                         the directory previously created for the current configuration')
@@ -104,6 +104,10 @@ def get_args_parser():
     parser.add_argument('--factor_scheduler', default=0.1, type=float)
     parser.add_argument('--threshold_scheduler', default=1e-4, type=float)
     parser.add_argument('--patiente_scheduler', default=1, type=float)
+
+    parser.add_argument('--use_curriculum', action='store_true',
+                        help='use curriculum learning')
+
     # technicality
     parser.add_argument('--seed', default=888, type=int, help='seed')
     parser.add_argument('--no_track', action='store_true',
@@ -166,7 +170,11 @@ def get_ckpt_dir(epoch: int, dir: str = '') -> str:
 def config_wandb(args: argparse.Namespace) -> Tuple[wandb.wandb_run.Run, str]:
     print(sys.executable)
     wandb.login()
+    
     wandb_run_name = f'PINN_{args.system}_NH{args.n_hidden}_HS{args.hidden_size}_AF{str(args.activation_fcn).upper()}_LR{args.lr}'
+
+    if args.add_noise == True:
+        wandb_run_name = f'{wandb_run_name}_NMEAN_{args.noise_mean}_NVAR_{args.noise_var}'
 
     wandb_tag = [f'{param}@{val}' for param, val in vars(args).items()]
 

@@ -31,7 +31,7 @@ class FCN(nn.Module):
         """
         # Normalize input here
         if self.normalizer is not None:
-            x = self.normalizer.Normalize(x, self.mode).float()
+            x = self.normalizer.Normalize(x, self.mode)
  
         for layer in self.layers[:-1]:
             x = self.activation(layer(x))
@@ -41,7 +41,7 @@ class FCN(nn.Module):
 
         # Denormalize output here
         if self.normalizer is not None:
-            x = self.normalizer.Denormalize(x, self.mode).float()
+            x = self.normalizer.Denormalize(x, self.mode)
         return x
 
 
@@ -67,9 +67,9 @@ class EncoderDecoder(nn.Module):
 
         if self.normalizer != None:
             norm_x_hat = self.normalizer.Normalize(
-                output_xzx, self.mode).float()
+                output_xzx, self.mode)
             norm_z_hat = self.normalizer.Normalize(
-                output_xz, self.mode).float()
+                output_xz, self.mode)
         else:
             norm_x_hat = output_xzx
             norm_z_hat = output_xz
