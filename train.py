@@ -425,7 +425,7 @@ def experiment(args: argparse.Namespace):
     elif str(args.activation_fcn) == 'sigmoid':
         activation = F.sigmoid
     else:
-        raise ValueError('The only Lipschitz function implemented is the ReLU')
+        raise ValueError('The only Lipschitz function implemented are ReLU, Tanh and Sigmoid')
 
     device = torch.device(args.device)
 
